@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cerebro-data
+  namespace: cerebro
+  labels:
+    app: cerebro
+    app.kubernetes.io/name: cerebro
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # WARNING: cerebro runs SQLite in WAL mode, which needs sane file locking
+  # and shared memory. NFS and other network filesystems with broken locking
+  # or mmap WILL corrupt the database. Use a local or block storage class.
+  # storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi

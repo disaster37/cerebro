@@ -1,0 +1,140 @@
+# replicaCount MUST stay 1: embedded SQLite is a single-writer. The template
+# fails rendering when this is set >1 to prevent silent DB corruption.
+replicaCount: 1
+
+image:
+  repository: ""           # REQUIRED (template fails when empty)
+  tag: ""                  # defaults to .Chart.AppVersion when empty
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+namespace:
+  # The chart does NOT auto-target its resources at this namespace; install with
+  # `helm install ... --namespace cerebro --create-namespace`. This template
+  # only creates the Namespace object when `create: true`.
+  create: false
+  name: cerebro
+
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+
+# cerebro never talks to the Kubernetes API.
+automountServiceAccountToken: false
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000            # required: makes the PVC/emptyDir writable by UID 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 9000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # nginx: nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    # traefik: traefik.ingress.kubernetes.io/router.entrypoints: web
+  # When exposing via Ingress, the terminating proxy must:
+  #   1. Set X-Forwarded-Proto: https so cerebro detects TLS
+  #   2. Redirect HTTP→HTTPS (`ssl-redirect: "true"` / `force-ssl-redirect: "true"`)
+  #   3. Enable HSTS for browser clients
+  # Without these, session cookies may be transmitted in cleartext.
+  hosts: []
+    # - host: cerebro.example.com
+    #   paths:
+    #     - path: /
+    #       pathType: Prefix
+  tls: []
+    # - secretName: cerebro-tls
+    #   hosts:
+    #     - cerebro.example.com
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Probe paths assume the default basePath: "/". If you change config.basePath,
+# prefix these paths accordingly (e.g. basePath "/cerebro" -> "/cerebro/favicon.ico").
+probes:
+  livenessPath: /favicon.ico
+  readinessPath: /favicon.ico
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  # WARNING: SQLite runs in WAL mode, which needs sane file locking and shared
+  # memory. NFS and other network filesystems with broken locking or mmap
+  # WILL corrupt the database. Use a local or block storage class.
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  annotations: {}
+
+# Rendered verbatim into the ConfigMap application.yaml. cerebro reads it once
+# at startup; to apply changes run `kubectl rollout restart deployment/cerebro`.
+config:
+  basePath: "/"
+  data:
+    path: /data/cerebro.db
+  rest:
+    history:
+      size: 50
+  es:
+    gzip: true
+  auth:
+    type: ""               # "" | basic | ldap (anything else fails rendering)
+    settings:
+      username: ""
+      url: ""
+      base-dn: ""
+      method: simple
+      user-template: "uid=%s,%s"
+      bind-dn: ""
+      group-search:
+        base-dn: ""
+        user-attr: ""
+        user-attr-template: ""
+        group: ""
+  hosts: []
+    # - host: "http://elasticsearch:9200"
+    #   name: "My cluster"
+
+secret:
+  existingSecret: ""       # use your own Secret (keys: session-key, basic-auth-password, ldap-bind-password)
+  sessionKey: ""           # REQUIRED when config.auth.type != "" (template fails otherwise)
+  basicAuthPassword: ""    # used when config.auth.type == basic
+  ldapBindPassword: ""     # used when config.auth.type == ldap
+
+nodeSelector: {}
+tolerations: []
+# Empty -> default SOFT pod anti-affinity on hostname is injected.
+affinity: {}
+
+extraVolumes: []
+extraVolumeMounts: []

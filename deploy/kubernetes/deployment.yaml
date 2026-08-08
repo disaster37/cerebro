@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cerebro
+  namespace: cerebro
+  labels:
+    app: cerebro
+    app.kubernetes.io/name: cerebro
+spec:
+  replicas: 1   # MUST stay 1: embedded SQLite is a single-writer; >1 corrupts the DB
+  strategy:
+    type: Recreate   # RWO PVC is attached; RollingUpdate deadlocks on RWO
+  selector:
+    matchLabels:
+      app: cerebro
+  template:
+    metadata:
+      labels:
+        app: cerebro
+        app.kubernetes.io/name: cerebro
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000   # makes the PVC/emptyDir writable by UID 1000 — do not remove
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cerebro
+          # Replace with your registry/tag, e.g. ghcr.io/org/cerebro:v1.2.3
+          image: "CHANGE_ME_REGISTRY/cerebro:CHANGE_ME_TAG"
+          ports:
+            - name: http
+              containerPort: 9000
+          env:
+            - name: CEREBRO_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cerebro-secret
+                  key: session-key
+            # Uncomment when auth.type == basic:
+            # - name: BASIC_AUTH_PWD
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: cerebro-secret
+            #       key: basic-auth-password
+            # Uncomment when auth.type == ldap:
+            # - name: LDAP_BIND_PWD
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: cerebro-secret
+            #       key: ldap-bind-password
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            httpGet:
+              path: /favicon.ico
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /favicon.ico
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /opt/cerebro/conf
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: cerebro-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: cerebro-data
+        - name: tmp
+          emptyDir: {}
