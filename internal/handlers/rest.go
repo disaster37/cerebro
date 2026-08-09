@@ -7,34 +7,33 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 
-	"cerebro/internal/dao"
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 func (h *Handlers) RestIndex(ctx context.Context, c *app.RequestContext) {
-	h.process(ctx, c, func(ctx context.Context, req CerebroRequest) (models.Response, error) {
+	h.process(ctx, c, func(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
 		resp, err := h.Elastic.GetAliases(ctx, req.Target)
 		if err != nil {
-			return models.ErrorResponse(502, err.Error()), nil
+			return domain.ErrorResponse(502, err.Error()), nil
 		}
-		indices, _ := models.AutocompletionIndices(resp.Body)
+		indices, _ := domain.AutocompletionIndices(resp.Body)
 		data, _ := json.Marshal(map[string]any{
 			"indices": json.RawMessage(indices),
 			"host":    req.Target.Host.Name,
 		})
-		return models.NewResponse(resp.Status, data), nil
+		return domain.NewResponse(resp.Status, data), nil
 	})
 }
 
 func (h *Handlers) RestRequest(ctx context.Context, c *app.RequestContext) {
-	h.process(ctx, c, func(ctx context.Context, req CerebroRequest) (models.Response, error) {
+	h.process(ctx, c, func(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
 		method, err := req.Get("method")
 		if err != nil {
-			return models.ErrorResponse(400, err.Error()), nil
+			return domain.ErrorResponse(400, err.Error()), nil
 		}
 		path, err := req.Get("path")
 		if err != nil {
-			return models.ErrorResponse(400, err.Error()), nil
+			return domain.ErrorResponse(400, err.Error()), nil
 		}
 		data := req.GetObjOpt("data")
 		// The frontend sends the request body text as a JSON string; unwrap it
@@ -50,7 +49,7 @@ func (h *Handlers) RestRequest(ctx context.Context, c *app.RequestContext) {
 
 		resp, err := h.Elastic.ExecuteRequest(method, path, data, ctx, req.Target)
 		if err != nil {
-			return models.ErrorResponse(502, err.Error()), nil
+			return domain.ErrorResponse(502, err.Error()), nil
 		}
 
 		if resp.Status >= 200 && resp.Status < 300 {
@@ -67,7 +66,7 @@ func (h *Handlers) RestRequest(ctx context.Context, c *app.RequestContext) {
 					bodyStr = string(data)
 				}
 			}
-			restReq := dao.RestRequest{
+			restReq := domain.RestRequest{
 				Path:      path,
 				Method:    method,
 				Body:      bodyStr,
@@ -84,11 +83,11 @@ func (h *Handlers) RestRequest(ctx context.Context, c *app.RequestContext) {
 }
 
 func (h *Handlers) RestHistory(ctx context.Context, c *app.RequestContext) {
-	h.process(ctx, c, func(ctx context.Context, req CerebroRequest) (models.Response, error) {
+	h.process(ctx, c, func(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
 		// History is nil when data.path is unset: degrade to an empty list
 		// instead of panicking (RestRequest already guards this case).
 		if h.History == nil {
-			return models.NewResponse(200, json.RawMessage("[]")), nil
+			return domain.NewResponse(200, json.RawMessage("[]")), nil
 		}
 		username := ""
 		if req.User != nil {
@@ -96,7 +95,7 @@ func (h *Handlers) RestHistory(ctx context.Context, c *app.RequestContext) {
 		}
 		entries, err := h.History.AllHistory(username)
 		if err != nil {
-			return models.ErrorResponse(500, "Error while loading requests history: "+err.Error()), nil
+			return domain.ErrorResponse(500, "Error while loading requests history: "+err.Error()), nil
 		}
 		var items []map[string]any
 		for _, e := range entries {
@@ -108,6 +107,6 @@ func (h *Handlers) RestHistory(ctx context.Context, c *app.RequestContext) {
 			})
 		}
 		body, _ := json.Marshal(items)
-		return models.NewResponse(200, body), nil
+		return domain.NewResponse(200, body), nil
 	})
 }

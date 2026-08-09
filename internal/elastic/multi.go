@@ -13,7 +13,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/sirupsen/logrus"
 
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 const placeholderURL = "http://placeholder.invalid:9200"
@@ -70,7 +70,7 @@ func NewMultiClient(gzip bool) (*MultiClient, error) {
 // detect issues a raw GET / through the shared targetTransport directly — not
 // through either client engine (avoids the go-elasticsearch product check on
 // OS hosts and the v4 typed path).
-func (m *MultiClient) detect(ctx context.Context, target models.ElasticServer) (FlavorInfo, error) {
+func (m *MultiClient) detect(ctx context.Context, target domain.ElasticServer) (FlavorInfo, error) {
 	req, err := http.NewRequestWithContext(withTarget(ctx, target), http.MethodGet, "/", nil)
 	if err != nil {
 		return FlavorInfo{}, err
@@ -100,7 +100,7 @@ func (m *MultiClient) detect(ctx context.Context, target models.ElasticServer) (
 //     next request retries detection)
 //     no configured type -> return FlavorElasticsearch fallback +
 //     the detection error (caller logs a warning; NOT cached)
-func (m *MultiClient) flavor(ctx context.Context, target models.ElasticServer) (FlavorInfo, error) {
+func (m *MultiClient) flavor(ctx context.Context, target domain.ElasticServer) (FlavorInfo, error) {
 	key := strings.TrimRight(target.Host.Name, "/")
 	if info, ok := m.flavors.get(key); ok {
 		return info, nil
@@ -129,7 +129,7 @@ func (m *MultiClient) flavor(ctx context.Context, target models.ElasticServer) (
 // isOpenSearch resolves flavor and returns true when the target is OpenSearch.
 // Detection errors are logged as warnings (the caller proceeds with the
 // resolved fallback flavor).
-func (m *MultiClient) isOpenSearch(ctx context.Context, target models.ElasticServer) bool {
+func (m *MultiClient) isOpenSearch(ctx context.Context, target domain.ElasticServer) bool {
 	info, err := m.flavor(ctx, target)
 	if err != nil {
 		m.log.Warnf("flavor detection for %q failed: %v (using fallback %s)", target.Host.Name, err, info.Flavor)
@@ -139,17 +139,17 @@ func (m *MultiClient) isOpenSearch(ctx context.Context, target models.ElasticSer
 
 // BackendInfo implements the ElasticClient method used by /navbar (§6). It
 // resolves the flavor (and version) of the target for UI display.
-func (m *MultiClient) BackendInfo(ctx context.Context, target models.ElasticServer) (models.BackendInfo, error) {
+func (m *MultiClient) BackendInfo(ctx context.Context, target domain.ElasticServer) (domain.BackendInfo, error) {
 	info, err := m.flavor(ctx, target)
 	if err != nil {
 		m.log.Warnf("BackendInfo detection for %q failed: %v (using fallback %s)", target.Host.Name, err, info.Flavor)
 	}
-	return models.BackendInfo{Type: string(info.Flavor), Version: info.Version}, nil
+	return domain.BackendInfo{Type: string(info.Flavor), Version: info.Version}, nil
 }
 
 // engine returns the appropriate ElasticClient for the target's resolved flavor.
 // Both *Client and *osClient satisfy the ElasticClient interface.
-func (m *MultiClient) engine(ctx context.Context, target models.ElasticServer) ElasticClient {
+func (m *MultiClient) engine(ctx context.Context, target domain.ElasticServer) ElasticClient {
 	if m.isOpenSearch(ctx, target) {
 		return m.os
 	}
@@ -159,206 +159,206 @@ func (m *MultiClient) engine(ctx context.Context, target models.ElasticServer) E
 // Dispatch wrappers — one-liner per interface method. Each routes to the
 // engine matching the resolved flavor of the per-request target.
 
-func (m *MultiClient) Main(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) Main(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).Main(ctx, target)
 }
 
-func (m *MultiClient) ClusterState(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) ClusterState(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).ClusterState(ctx, target)
 }
 
-func (m *MultiClient) IndicesStats(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) IndicesStats(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).IndicesStats(ctx, target)
 }
 
-func (m *MultiClient) NodesStats(stats []string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) NodesStats(stats []string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).NodesStats(stats, ctx, target)
 }
 
-func (m *MultiClient) NodeStats(node string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) NodeStats(node string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).NodeStats(node, ctx, target)
 }
 
-func (m *MultiClient) IndexStats(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) IndexStats(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).IndexStats(index, ctx, target)
 }
 
-func (m *MultiClient) ClusterSettings(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) ClusterSettings(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).ClusterSettings(ctx, target)
 }
 
-func (m *MultiClient) Aliases(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) Aliases(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).Aliases(ctx, target)
 }
 
-func (m *MultiClient) ClusterHealth(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) ClusterHealth(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).ClusterHealth(ctx, target)
 }
 
-func (m *MultiClient) Nodes(flags []string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) Nodes(flags []string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).Nodes(flags, ctx, target)
 }
 
-func (m *MultiClient) CloseIndex(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) CloseIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).CloseIndex(index, ctx, target)
 }
 
-func (m *MultiClient) OpenIndex(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) OpenIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).OpenIndex(index, ctx, target)
 }
 
-func (m *MultiClient) RefreshIndex(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) RefreshIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).RefreshIndex(index, ctx, target)
 }
 
-func (m *MultiClient) FlushIndex(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) FlushIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).FlushIndex(index, ctx, target)
 }
 
-func (m *MultiClient) ForceMerge(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) ForceMerge(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).ForceMerge(index, ctx, target)
 }
 
-func (m *MultiClient) ClearIndexCache(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) ClearIndexCache(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).ClearIndexCache(index, ctx, target)
 }
 
-func (m *MultiClient) DeleteIndex(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) DeleteIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).DeleteIndex(index, ctx, target)
 }
 
-func (m *MultiClient) GetIndexSettings(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetIndexSettings(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetIndexSettings(index, ctx, target)
 }
 
-func (m *MultiClient) GetIndexSettingsFlat(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetIndexSettingsFlat(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetIndexSettingsFlat(index, ctx, target)
 }
 
-func (m *MultiClient) GetIndexMapping(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetIndexMapping(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetIndexMapping(index, ctx, target)
 }
 
-func (m *MultiClient) PutClusterSettings(body string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) PutClusterSettings(body string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).PutClusterSettings(body, ctx, target)
 }
 
-func (m *MultiClient) EnableShardAllocation(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) EnableShardAllocation(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).EnableShardAllocation(ctx, target)
 }
 
-func (m *MultiClient) DisableShardAllocation(kind string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) DisableShardAllocation(kind string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).DisableShardAllocation(kind, ctx, target)
 }
 
-func (m *MultiClient) GetShardStats(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetShardStats(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetShardStats(index, ctx, target)
 }
 
-func (m *MultiClient) RelocateShard(shard int, index, from, to string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) RelocateShard(shard int, index, from, to string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).RelocateShard(shard, index, from, to, ctx, target)
 }
 
-func (m *MultiClient) GetIndexRecovery(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetIndexRecovery(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetIndexRecovery(index, ctx, target)
 }
 
-func (m *MultiClient) GetClusterMapping(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetClusterMapping(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetClusterMapping(ctx, target)
 }
 
-func (m *MultiClient) GetAliases(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetAliases(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetAliases(ctx, target)
 }
 
-func (m *MultiClient) UpdateAliases(changes json.RawMessage, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) UpdateAliases(changes json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).UpdateAliases(changes, ctx, target)
 }
 
-func (m *MultiClient) GetIndexMetadata(index string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetIndexMetadata(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetIndexMetadata(index, ctx, target)
 }
 
-func (m *MultiClient) CreateIndex(index string, metadata json.RawMessage, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) CreateIndex(index string, metadata json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).CreateIndex(index, metadata, ctx, target)
 }
 
-func (m *MultiClient) GetIndices(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetIndices(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetIndices(ctx, target)
 }
 
-func (m *MultiClient) GetTemplates(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetTemplates(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetTemplates(ctx, target)
 }
 
-func (m *MultiClient) CreateTemplate(name string, template json.RawMessage, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) CreateTemplate(name string, template json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).CreateTemplate(name, template, ctx, target)
 }
 
-func (m *MultiClient) DeleteTemplate(name string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) DeleteTemplate(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).DeleteTemplate(name, ctx, target)
 }
 
-func (m *MultiClient) GetNodes(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetNodes(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetNodes(ctx, target)
 }
 
-func (m *MultiClient) AnalyzeTextByField(index, field, text string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) AnalyzeTextByField(index, field, text string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).AnalyzeTextByField(index, field, text, ctx, target)
 }
 
-func (m *MultiClient) AnalyzeTextByAnalyzer(index, analyzer, text string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) AnalyzeTextByAnalyzer(index, analyzer, text string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).AnalyzeTextByAnalyzer(index, analyzer, text, ctx, target)
 }
 
-func (m *MultiClient) GetClusterSettingsFlat(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetClusterSettingsFlat(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetClusterSettingsFlat(ctx, target)
 }
 
-func (m *MultiClient) GetRepositories(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetRepositories(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetRepositories(ctx, target)
 }
 
-func (m *MultiClient) CreateRepository(name, repoType string, settings json.RawMessage, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) CreateRepository(name, repoType string, settings json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).CreateRepository(name, repoType, settings, ctx, target)
 }
 
-func (m *MultiClient) DeleteRepository(name string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) DeleteRepository(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).DeleteRepository(name, ctx, target)
 }
 
-func (m *MultiClient) GetSnapshots(repository string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) GetSnapshots(repository string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetSnapshots(repository, ctx, target)
 }
 
-func (m *MultiClient) DeleteSnapshot(repository, snapshot string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) DeleteSnapshot(repository, snapshot string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).DeleteSnapshot(repository, snapshot, ctx, target)
 }
 
-func (m *MultiClient) CreateSnapshot(repository, snapshot string, ignoreUnavailable, includeGlobalState bool, indices string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) CreateSnapshot(repository, snapshot string, ignoreUnavailable, includeGlobalState bool, indices string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).CreateSnapshot(repository, snapshot, ignoreUnavailable, includeGlobalState, indices, ctx, target)
 }
 
-func (m *MultiClient) RestoreSnapshot(repository, snapshot string, renamePattern, renameReplacement string, ignoreUnavailable, includeAliases, includeGlobalState bool, indices string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) RestoreSnapshot(repository, snapshot string, renamePattern, renameReplacement string, ignoreUnavailable, includeAliases, includeGlobalState bool, indices string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).RestoreSnapshot(repository, snapshot, renamePattern, renameReplacement, ignoreUnavailable, includeAliases, includeGlobalState, indices, ctx, target)
 }
 
-func (m *MultiClient) SaveClusterSettings(settings json.RawMessage, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) SaveClusterSettings(settings json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).SaveClusterSettings(settings, ctx, target)
 }
 
-func (m *MultiClient) UpdateIndexSettings(index string, settings json.RawMessage, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) UpdateIndexSettings(index string, settings json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).UpdateIndexSettings(index, settings, ctx, target)
 }
 
-func (m *MultiClient) CatRequest(api string, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) CatRequest(api string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).CatRequest(api, ctx, target)
 }
 
-func (m *MultiClient) CatMaster(ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) CatMaster(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).CatMaster(ctx, target)
 }
 
-func (m *MultiClient) ExecuteRequest(method, path string, data json.RawMessage, ctx context.Context, target models.ElasticServer) (*models.Response, error) {
+func (m *MultiClient) ExecuteRequest(method, path string, data json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).ExecuteRequest(method, path, data, ctx, target)
 }

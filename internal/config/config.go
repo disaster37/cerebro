@@ -55,7 +55,7 @@ type HostConfig struct {
 	HeadersWhitelist []string `yaml:"headers-whitelist" mapstructure:"headers-whitelist"`
 }
 
-// ESAuth mirrors models.ESAuth for config parsing.
+// ESAuth mirrors domain.ESAuth for config parsing.
 type ESAuth struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`

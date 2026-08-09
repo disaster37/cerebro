@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 // isSuccess mirrors Scala ElasticResponse.isSuccess: 200..299.
@@ -33,7 +33,7 @@ func isNDJSON(data []byte) bool {
 // toResponse converts an ES status + body reader into the envelope, parsing JSON
 // body when valid and falling back to {"error": <body string>} when not.
 // Always closes the body reader.
-func toResponse(status int, body io.ReadCloser) (*models.Response, error) {
+func toResponse(status int, body io.ReadCloser) (*domain.Response, error) {
 	defer func() { _ = body.Close() }()
 	raw, err := io.ReadAll(body)
 	if err != nil {
@@ -45,8 +45,8 @@ func toResponse(status int, body io.ReadCloser) (*models.Response, error) {
 		// Not JSON — wrap the raw string in an error object (mirrors ES non-JSON
 		// handling as {"error": <body string>}).
 		msg, _ := json.Marshal(map[string]string{"error": string(raw)})
-		return &models.Response{Status: status, Body: msg}, nil
+		return &domain.Response{Status: status, Body: msg}, nil
 	}
 
-	return &models.Response{Status: status, Body: parsed}, nil
+	return &domain.Response{Status: status, Body: parsed}, nil
 }

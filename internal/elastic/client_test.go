@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 // recordedRequest captures the last inbound request to a fake cluster.
@@ -75,8 +75,8 @@ func newFakeES(t *testing.T, rec *recordedRequest) *httptest.Server {
 	}))
 }
 
-func targetFor(srv *httptest.Server, hostType string) models.ElasticServer {
-	return models.ElasticServer{Host: models.Host{Name: srv.URL, Type: hostType}}
+func targetFor(srv *httptest.Server, hostType string) domain.ElasticServer {
+	return domain.ElasticServer{Host: domain.Host{Name: srv.URL, Type: hostType}}
 }
 
 func TestMultiClientDetectsAndDispatchesOpenSearch(t *testing.T) {
@@ -217,7 +217,7 @@ func TestDetectionFailureFallsBackToElasticsearch(t *testing.T) {
 	}
 	// Closed port: detection fails, falls back to ES engine, which then fails
 	// to connect (transport error surfaces to the caller).
-	target := models.ElasticServer{Host: models.Host{Name: "http://127.0.0.1:1"}}
+	target := domain.ElasticServer{Host: domain.Host{Name: "http://127.0.0.1:1"}}
 	ctx := context.Background()
 
 	info, derr := m.flavor(ctx, target)
@@ -249,44 +249,44 @@ func TestOSEngineRequestBuilding(t *testing.T) {
 
 	cases := []struct {
 		name      string
-		call      func() (*models.Response, error)
+		call      func() (*domain.Response, error)
 		method    string
 		path      string
 		query     string
 		ct        string
 		bodyCheck string
 	}{
-		{"Main", func() (*models.Response, error) { return os.Main(ctx, target) }, "GET", "/", "", "", ""},
-		{"ClusterHealth", func() (*models.Response, error) { return os.ClusterHealth(ctx, target) }, "GET", "/_cluster/health", "", "", ""},
-		{"IndexStats", func() (*models.Response, error) { return os.IndexStats("idx", ctx, target) }, "GET", "/idx/_stats", "", "", ""},
-		{"GetIndexSettingsFlat", func() (*models.Response, error) { return os.GetIndexSettingsFlat("idx", ctx, target) }, "GET", "/idx/_settings", "flat_settings=true", "", ""},
-		{"GetShardStats", func() (*models.Response, error) { return os.GetShardStats("idx", ctx, target) }, "GET", "/idx/_stats", "level=shards", "", ""},
-		{"CreateIndex", func() (*models.Response, error) {
+		{"Main", func() (*domain.Response, error) { return os.Main(ctx, target) }, "GET", "/", "", "", ""},
+		{"ClusterHealth", func() (*domain.Response, error) { return os.ClusterHealth(ctx, target) }, "GET", "/_cluster/health", "", "", ""},
+		{"IndexStats", func() (*domain.Response, error) { return os.IndexStats("idx", ctx, target) }, "GET", "/idx/_stats", "", "", ""},
+		{"GetIndexSettingsFlat", func() (*domain.Response, error) { return os.GetIndexSettingsFlat("idx", ctx, target) }, "GET", "/idx/_settings", "flat_settings=true", "", ""},
+		{"GetShardStats", func() (*domain.Response, error) { return os.GetShardStats("idx", ctx, target) }, "GET", "/idx/_stats", "level=shards", "", ""},
+		{"CreateIndex", func() (*domain.Response, error) {
 			return os.CreateIndex("idx", json.RawMessage(`{"settings":{}}`), ctx, target)
 		}, "PUT", "/idx", "", "", `{"settings":{}}`},
-		{"DeleteIndex", func() (*models.Response, error) { return os.DeleteIndex("idx", ctx, target) }, "DELETE", "/idx", "", "", ""},
-		{"UpdateAliases", func() (*models.Response, error) {
+		{"DeleteIndex", func() (*domain.Response, error) { return os.DeleteIndex("idx", ctx, target) }, "DELETE", "/idx", "", "", ""},
+		{"UpdateAliases", func() (*domain.Response, error) {
 			return os.UpdateAliases(json.RawMessage(`[{"add":{}}]`), ctx, target)
 		}, "POST", "/_aliases", "", "", `{"actions":[`},
-		{"GetIndices", func() (*models.Response, error) { return os.GetIndices(ctx, target) }, "GET", "/_cat/indices", "format=json", "", ""},
-		{"AnalyzeTextByField", func() (*models.Response, error) { return os.AnalyzeTextByField("idx", "field1", "hello", ctx, target) }, "POST", "/idx/_analyze", "", "", `"field":"field1"`},
-		{"CreateSnapshot", func() (*models.Response, error) {
+		{"GetIndices", func() (*domain.Response, error) { return os.GetIndices(ctx, target) }, "GET", "/_cat/indices", "format=json", "", ""},
+		{"AnalyzeTextByField", func() (*domain.Response, error) { return os.AnalyzeTextByField("idx", "field1", "hello", ctx, target) }, "POST", "/idx/_analyze", "", "", `"field":"field1"`},
+		{"CreateSnapshot", func() (*domain.Response, error) {
 			return os.CreateSnapshot("repo", "snap", true, false, "idx", ctx, target)
 		}, "PUT", "/_snapshot/repo/snap", "", "", `"ignore_unavailable":true`},
-		{"RestoreSnapshot", func() (*models.Response, error) {
+		{"RestoreSnapshot", func() (*domain.Response, error) {
 			return os.RestoreSnapshot("repo", "snap", "p", "r", true, true, false, "idx", ctx, target)
 		}, "POST", "/_snapshot/repo/snap/_restore", "", "", `"rename_pattern":"p"`},
-		{"CatRequest", func() (*models.Response, error) { return os.CatRequest("indices", ctx, target) }, "GET", "/_cat/indices", "format=json", "", ""},
-		{"ExecuteRequest_json", func() (*models.Response, error) {
+		{"CatRequest", func() (*domain.Response, error) { return os.CatRequest("indices", ctx, target) }, "GET", "/_cat/indices", "format=json", "", ""},
+		{"ExecuteRequest_json", func() (*domain.Response, error) {
 			return os.ExecuteRequest("GET", "/_cluster/settings", json.RawMessage(`{}`), ctx, target)
 		}, "GET", "/_cluster/settings", "", "application/json", `{}`},
-		{"ExecuteRequest_ndjson", func() (*models.Response, error) {
+		{"ExecuteRequest_ndjson", func() (*domain.Response, error) {
 			return os.ExecuteRequest("POST", "/_bulk", json.RawMessage(`{"index":{}}`+"\n"+`{"a":1}`+"\n"), ctx, target)
 		}, "POST", "/_bulk", "", "application/x-ndjson", `{"index":{}`},
-		{"CreateIndex_path_escape", func() (*models.Response, error) {
+		{"CreateIndex_path_escape", func() (*domain.Response, error) {
 			return os.CreateIndex("my index", json.RawMessage(`{}`), ctx, target)
 		}, "PUT", "/my%20index", "", "", `{}`},
-		{"ExecuteRequest_leading_slash", func() (*models.Response, error) { return os.ExecuteRequest("GET", "_cluster/health", nil, ctx, target) }, "GET", "/_cluster/health", "", "", ""},
+		{"ExecuteRequest_leading_slash", func() (*domain.Response, error) { return os.ExecuteRequest("GET", "_cluster/health", nil, ctx, target) }, "GET", "/_cluster/health", "", "", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

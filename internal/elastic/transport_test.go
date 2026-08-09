@@ -7,13 +7,13 @@ import (
 	"strings"
 	"testing"
 
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
-func newTestTarget(t *testing.T, url string, auth *models.ESAuth, headers []models.KeyValue, hostType string) models.ElasticServer {
+func newTestTarget(t *testing.T, url string, auth *domain.ESAuth, headers []domain.KeyValue, hostType string) domain.ElasticServer {
 	t.Helper()
-	return models.ElasticServer{
-		Host: models.Host{
+	return domain.ElasticServer{
+		Host: domain.Host{
 			Name: url,
 			Type: hostType,
 			Auth: auth,
@@ -56,7 +56,7 @@ func TestTargetTransportBasicAuth(t *testing.T) {
 	defer srv.Close()
 
 	tt := newTargetTransport(&http.Client{}, false)
-	target := newTestTarget(t, srv.URL, &models.ESAuth{Username: "u", Password: "p"}, nil, "")
+	target := newTestTarget(t, srv.URL, &domain.ESAuth{Username: "u", Password: "p"}, nil, "")
 	req, _ := http.NewRequestWithContext(withTarget(context.Background(), target), http.MethodGet, "/", nil)
 	resp, err := tt.RoundTrip(req)
 	if err != nil {
@@ -78,7 +78,7 @@ func TestTargetTransportForwardedHeaders(t *testing.T) {
 	defer srv.Close()
 
 	tt := newTargetTransport(&http.Client{}, false)
-	target := newTestTarget(t, srv.URL, nil, []models.KeyValue{
+	target := newTestTarget(t, srv.URL, nil, []domain.KeyValue{
 		{Key: "x-proxy-user", Value: "alice"},
 		{Key: "x-existing", Value: "should-not-overwrite"},
 	}, "")

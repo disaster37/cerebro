@@ -6,25 +6,25 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 func (h *Handlers) AliasesGetAliases(ctx context.Context, c *app.RequestContext) {
-	h.process(ctx, c, func(ctx context.Context, req CerebroRequest) (models.Response, error) {
+	h.process(ctx, c, func(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
 		resp, err := h.Elastic.GetAliases(ctx, req.Target)
 		if err != nil {
-			return models.ErrorResponse(502, err.Error()), nil
+			return domain.ErrorResponse(502, err.Error()), nil
 		}
-		aliases, err := models.Aliases(resp.Body)
+		aliases, err := domain.Aliases(resp.Body)
 		if err != nil {
-			return models.ErrorResponse(500, err.Error()), nil
+			return domain.ErrorResponse(500, err.Error()), nil
 		}
-		return models.NewResponse(resp.Status, aliases), nil
+		return domain.NewResponse(resp.Status, aliases), nil
 	})
 }
 
 func (h *Handlers) AliasesUpdateAliases(ctx context.Context, c *app.RequestContext) {
-	h.process(ctx, c, func(ctx context.Context, req CerebroRequest) (models.Response, error) {
+	h.process(ctx, c, func(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
 		var m map[string]json.RawMessage
 		_ = json.Unmarshal(req.Body, &m)
 		changes := json.RawMessage("[]")
@@ -33,7 +33,7 @@ func (h *Handlers) AliasesUpdateAliases(ctx context.Context, c *app.RequestConte
 		}
 		resp, err := h.Elastic.UpdateAliases(changes, ctx, req.Target)
 		if err != nil {
-			return models.ErrorResponse(502, err.Error()), nil
+			return domain.ErrorResponse(502, err.Error()), nil
 		}
 		return *resp, nil
 	})

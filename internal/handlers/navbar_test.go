@@ -13,7 +13,7 @@ import (
 
 	"cerebro/internal/config"
 	"cerebro/internal/elastic"
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 // fakeElastic satisfies the full ElasticClient interface without 50 stubs:
@@ -21,15 +21,15 @@ import (
 // is correct for a test double.
 type fakeElastic struct {
 	elastic.ElasticClient
-	health *models.Response
-	info   models.BackendInfo
+	health *domain.Response
+	info   domain.BackendInfo
 }
 
-func (f *fakeElastic) ClusterHealth(ctx context.Context, t models.ElasticServer) (*models.Response, error) {
+func (f *fakeElastic) ClusterHealth(ctx context.Context, t domain.ElasticServer) (*domain.Response, error) {
 	return f.health, nil
 }
 
-func (f *fakeElastic) BackendInfo(ctx context.Context, t models.ElasticServer) (models.BackendInfo, error) {
+func (f *fakeElastic) BackendInfo(ctx context.Context, t domain.ElasticServer) (domain.BackendInfo, error) {
 	return f.info, nil
 }
 
@@ -66,8 +66,8 @@ func TestNavbarInjectsBackendFields(t *testing.T) {
 		"status":       "green",
 	})
 	fake := &fakeElastic{
-		health: &models.Response{Status: 200, Body: healthBody},
-		info:   models.BackendInfo{Type: "opensearch", Version: "3.4.0"},
+		health: &domain.Response{Status: 200, Body: healthBody},
+		info:   domain.BackendInfo{Type: "opensearch", Version: "3.4.0"},
 	}
 	h := newNavbarHandlers(t, fake)
 
@@ -77,7 +77,7 @@ func TestNavbarInjectsBackendFields(t *testing.T) {
 		t.Errorf("HTTP status = %d, want 200", res.StatusCode())
 	}
 
-	var env models.Response
+	var env domain.Response
 	if err := json.Unmarshal(res.Body(), &env); err != nil {
 		t.Fatalf("unmarshal envelope: %v\nbody: %s", err, res.Body())
 	}
@@ -108,15 +108,15 @@ func TestNavbarKeepsExistingFields(t *testing.T) {
 		"status":       "yellow",
 	})
 	fake := &fakeElastic{
-		health: &models.Response{Status: 200, Body: healthBody},
-		info:   models.BackendInfo{Type: "elasticsearch", Version: "9.4.3"},
+		health: &domain.Response{Status: 200, Body: healthBody},
+		info:   domain.BackendInfo{Type: "elasticsearch", Version: "9.4.3"},
 	}
 	h := newNavbarHandlers(t, fake)
 
 	w := performNavbar(t, h, `{"host":"test"}`)
 	res := w.Result()
 
-	var env models.Response
+	var env domain.Response
 	if err := json.Unmarshal(res.Body(), &env); err != nil {
 		t.Fatalf("unmarshal envelope: %v", err)
 	}

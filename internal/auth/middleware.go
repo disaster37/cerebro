@@ -10,7 +10,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/gorilla/securecookie"
 
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 const SessionCookie = "cerebro_session"
@@ -30,7 +30,7 @@ func newSecureCookie(secret string) *securecookie.SecureCookie {
 	return sc
 }
 
-func AuthMiddleware(svc AuthService, secret string) app.HandlerFunc {
+func AuthMiddleware(svc domain.AuthService, secret string) app.HandlerFunc {
 	sc := newSecureCookie(secret)
 
 	return func(ctx context.Context, c *app.RequestContext) {
@@ -40,13 +40,13 @@ func AuthMiddleware(svc AuthService, secret string) app.HandlerFunc {
 		}
 
 		if username, ok := decodeSessionCookie(sc, c); ok {
-			c.Set("user", &models.User{Name: username})
+			c.Set("user", &domain.User{Name: username})
 			c.Next(ctx)
 			return
 		}
 
 		if isAPICall(c) {
-			c.JSON(http.StatusOK, models.NullResponse())
+			c.JSON(http.StatusOK, domain.NullResponse())
 			c.Abort()
 			return
 		}

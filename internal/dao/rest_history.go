@@ -1,25 +1,12 @@
 package dao
 
 import (
-	"crypto/md5"
-	"fmt"
 	"time"
+
+	"cerebro/internal/domain"
 )
 
-type RestRequest struct {
-	Path      string
-	Method    string
-	Body      string
-	Username  string
-	CreatedAt time.Time
-}
-
-func (r RestRequest) MD5() string {
-	h := md5.Sum([]byte(r.Path + r.Method + r.Body + r.Username))
-	return fmt.Sprintf("%x", h)
-}
-
-func (d *SQLiteDAO) AllHistory(username string) ([]RestRequest, error) {
+func (d *SQLiteDAO) AllHistory(username string) ([]domain.RestRequest, error) {
 	rows, err := d.db.Query(
 		"SELECT path, method, body, username, created_at FROM rest_requests WHERE username=? ORDER BY created_at DESC",
 		username,
@@ -29,9 +16,9 @@ func (d *SQLiteDAO) AllHistory(username string) ([]RestRequest, error) {
 	}
 	defer func() { _ = rows.Close() }()
 
-	var out []RestRequest
+	var out []domain.RestRequest
 	for rows.Next() {
-		var r RestRequest
+		var r domain.RestRequest
 		var ts int64
 		if err := rows.Scan(&r.Path, &r.Method, &r.Body, &r.Username, &ts); err != nil {
 			return nil, err
@@ -42,7 +29,7 @@ func (d *SQLiteDAO) AllHistory(username string) ([]RestRequest, error) {
 	return out, rows.Err()
 }
 
-func (d *SQLiteDAO) SaveHistory(req RestRequest, max int) (string, error) {
+func (d *SQLiteDAO) SaveHistory(req domain.RestRequest, max int) (string, error) {
 	md5sum := req.MD5()
 
 	var existingID int

@@ -1,7 +1,9 @@
-package models
+package domain
 
 import "encoding/json"
 
+// NOTE: currently unused — handlers use the ElasticClient.ClusterHealth method
+// instead of this transform. Kept for parity; do not delete in this refactor.
 func ClusterHealth(in json.RawMessage) (json.RawMessage, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(in, &raw); err != nil {

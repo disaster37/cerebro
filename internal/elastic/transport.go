@@ -7,17 +7,17 @@ import (
 	"net/url"
 	"strings"
 
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 type targetKey struct{}
 
-func withTarget(ctx context.Context, t models.ElasticServer) context.Context {
+func withTarget(ctx context.Context, t domain.ElasticServer) context.Context {
 	return context.WithValue(ctx, targetKey{}, t)
 }
 
-func targetFromContext(ctx context.Context) (models.ElasticServer, bool) {
-	t, ok := ctx.Value(targetKey{}).(models.ElasticServer)
+func targetFromContext(ctx context.Context) (domain.ElasticServer, bool) {
+	t, ok := ctx.Value(targetKey{}).(domain.ElasticServer)
 	return t, ok
 }
 

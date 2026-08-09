@@ -7,7 +7,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 func (h *Handlers) ConnectIndex(ctx context.Context, c *app.RequestContext) {
@@ -16,14 +16,14 @@ func (h *Handlers) ConnectIndex(ctx context.Context, c *app.RequestContext) {
 		names = []string{}
 	}
 	body, _ := json.Marshal(names)
-	c.JSON(http.StatusOK, models.NewResponse(200, body))
+	c.JSON(http.StatusOK, domain.NewResponse(200, body))
 }
 
 func (h *Handlers) ConnectConnect(ctx context.Context, c *app.RequestContext) {
-	h.process(ctx, c, func(ctx context.Context, req CerebroRequest) (models.Response, error) {
+	h.process(ctx, c, func(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
 		resp, err := h.Elastic.ExecuteRequest("GET", "/_cluster/health", nil, ctx, req.Target)
 		if err != nil {
-			return models.ErrorResponse(502, err.Error()), nil
+			return domain.ErrorResponse(502, err.Error()), nil
 		}
 		return *resp, nil
 	})

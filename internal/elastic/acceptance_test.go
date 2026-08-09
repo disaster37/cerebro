@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"cerebro/internal/elastic"
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 	"cerebro/internal/testutil"
 )
 
@@ -55,7 +55,7 @@ func runAcceptanceSuite(t *testing.T, url string, wantFlavor elastic.Flavor, wan
 	if err != nil {
 		t.Fatalf("NewAcceptanceClient: %v", err)
 	}
-	target := models.ElasticServer{Host: models.Host{Name: url}}
+	target := domain.ElasticServer{Host: domain.Host{Name: url}}
 	ctx := context.Background()
 
 	t.Run("Main_detects_flavor_and_version", func(t *testing.T) {

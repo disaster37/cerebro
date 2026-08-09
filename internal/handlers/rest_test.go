@@ -13,7 +13,7 @@ import (
 
 	"cerebro/internal/config"
 	"cerebro/internal/elastic"
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 // execFake records the ExecuteRequest arguments; unstubbed methods panic.
@@ -24,11 +24,11 @@ type execFake struct {
 	data   json.RawMessage
 }
 
-func (f *execFake) ExecuteRequest(method, path string, data json.RawMessage, ctx context.Context, t models.ElasticServer) (*models.Response, error) {
+func (f *execFake) ExecuteRequest(method, path string, data json.RawMessage, ctx context.Context, t domain.ElasticServer) (*domain.Response, error) {
 	f.method = method
 	f.path = path
 	f.data = data
-	return &models.Response{Status: 200, Body: json.RawMessage(`{"ok":true}`)}, nil
+	return &domain.Response{Status: 200, Body: json.RawMessage(`{"ok":true}`)}, nil
 }
 
 // TestRestRequestUnwrapsStringData pins that the JSON-string `data` field sent
@@ -118,7 +118,7 @@ func TestRestHistoryWithoutDAO(t *testing.T) {
 	if res.StatusCode() != 200 {
 		t.Fatalf("HTTP status = %d, want 200", res.StatusCode())
 	}
-	var env models.Response
+	var env domain.Response
 	if err := json.Unmarshal(res.Body(), &env); err != nil {
 		t.Fatalf("unmarshal envelope: %v", err)
 	}
@@ -130,16 +130,16 @@ func TestRestHistoryWithoutDAO(t *testing.T) {
 // captureFake records the target seen by ClusterHealth; unstubbed methods panic.
 type captureFake struct {
 	elastic.ElasticClient
-	got models.ElasticServer
+	got domain.ElasticServer
 }
 
-func (f *captureFake) ClusterHealth(ctx context.Context, t models.ElasticServer) (*models.Response, error) {
+func (f *captureFake) ClusterHealth(ctx context.Context, t domain.ElasticServer) (*domain.Response, error) {
 	f.got = t
-	return &models.Response{Status: 200, Body: json.RawMessage(`{"status":"green"}`)}, nil
+	return &domain.Response{Status: 200, Body: json.RawMessage(`{"status":"green"}`)}, nil
 }
 
-func (f *captureFake) BackendInfo(ctx context.Context, t models.ElasticServer) (models.BackendInfo, error) {
-	return models.BackendInfo{Type: "elasticsearch"}, nil
+func (f *captureFake) BackendInfo(ctx context.Context, t domain.ElasticServer) (domain.BackendInfo, error) {
+	return domain.BackendInfo{Type: "elasticsearch"}, nil
 }
 
 // TestPerRequestCredentialsDoNotMutateRegistry pins that per-request

@@ -14,13 +14,13 @@ import (
 	"github.com/cloudwego/hertz/pkg/route"
 
 	"cerebro/internal/config"
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 const testSecret = "unit-test-secret"
 
 // newBasicAuthSvc builds an enabled basic-auth service (u/p).
-func newBasicAuthSvc(t *testing.T) AuthService {
+func newBasicAuthSvc(t *testing.T) domain.AuthService {
 	t.Helper()
 	svc, err := NewAuthService(config.AuthConfig{
 		Type:     "basic",
@@ -34,13 +34,13 @@ func newBasicAuthSvc(t *testing.T) AuthService {
 
 // newEngine registers the middleware in front of a probe handler that echoes
 // the context user (mirroring how process() reads it).
-func newEngine(svc AuthService) *route.Engine {
+func newEngine(svc domain.AuthService) *route.Engine {
 	engine := route.NewEngine(hertzconfig.NewOptions(nil))
 	engine.Use(AuthMiddleware(svc, testSecret))
 	engine.POST("/probe", func(ctx context.Context, c *app.RequestContext) {
 		name := ""
 		if u, ok := c.Get("user"); ok {
-			if user, ok := u.(*models.User); ok && user != nil {
+			if user, ok := u.(*domain.User); ok && user != nil {
 				name = user.Name
 			}
 		}
@@ -63,7 +63,7 @@ func TestAuthMiddleware_APICallWithoutSession_Returns303Envelope(t *testing.T) {
 	if res.StatusCode() != 200 {
 		t.Fatalf("HTTP status = %d, want 200 (envelope)", res.StatusCode())
 	}
-	var env models.Response
+	var env domain.Response
 	if err := json.Unmarshal(res.Body(), &env); err != nil {
 		t.Fatalf("unmarshal envelope: %v (body %q)", err, res.Body())
 	}
@@ -129,7 +129,7 @@ func TestAuthMiddleware_TamperedSession_TreatedAsNoSession(t *testing.T) {
 		Key:   "Cookie",
 		Value: SessionCookie + "=" + tampered,
 	}).Result()
-	var env models.Response
+	var env domain.Response
 	if err := json.Unmarshal(res.Body(), &env); err != nil {
 		t.Fatalf("unmarshal envelope: %v (body %q)", err, res.Body())
 	}

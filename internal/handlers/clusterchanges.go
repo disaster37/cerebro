@@ -7,11 +7,11 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 func (h *Handlers) ClusterChangesGet(ctx context.Context, c *app.RequestContext) {
-	h.process(ctx, c, func(ctx context.Context, req CerebroRequest) (models.Response, error) {
+	h.process(ctx, c, func(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
 		// Paths need a leading slash: the ES engine sends them verbatim as the
 		// HTTP request target (the Scala client prepended "/" in executeRequest).
 		apiPaths := []string{"/_aliases", "/_nodes/transport", "/_cluster/state/blocks"}
@@ -19,12 +19,12 @@ func (h *Handlers) ClusterChangesGet(ctx context.Context, c *app.RequestContext)
 		for i, path := range apiPaths {
 			resp, err := h.Elastic.ExecuteRequest("GET", path, nil, ctx, req.Target)
 			if err != nil {
-				return models.ErrorResponse(502, err.Error()), nil
+				return domain.ErrorResponse(502, err.Error()), nil
 			}
 			if resp.Status < 200 || resp.Status >= 300 {
 				msg := fmt.Sprintf("Failure for [%s]", path)
 				body, _ := json.Marshal(map[string]string{"error": msg})
-				return models.Response{Status: resp.Status, Body: body}, nil
+				return domain.Response{Status: resp.Status, Body: body}, nil
 			}
 			responses[i] = resp.Body
 		}
@@ -62,7 +62,7 @@ func (h *Handlers) ClusterChangesGet(ctx context.Context, c *app.RequestContext)
 			"nodes":        nodes,
 			"cluster_name": stateObj.ClusterName,
 		})
-		return models.NewResponse(200, body), nil
+		return domain.NewResponse(200, body), nil
 	})
 }
 

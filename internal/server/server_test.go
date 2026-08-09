@@ -18,7 +18,7 @@ import (
 	"cerebro/internal/config"
 	"cerebro/internal/elastic"
 	"cerebro/internal/handlers"
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 // fakeElastic satisfies the ElasticClient interface for the two methods the
@@ -27,12 +27,12 @@ type fakeElastic struct {
 	elastic.ElasticClient
 }
 
-func (f *fakeElastic) ClusterHealth(ctx context.Context, t models.ElasticServer) (*models.Response, error) {
-	return &models.Response{Status: 200, Body: json.RawMessage(`{"cluster_name":"c","status":"green"}`)}, nil
+func (f *fakeElastic) ClusterHealth(ctx context.Context, t domain.ElasticServer) (*domain.Response, error) {
+	return &domain.Response{Status: 200, Body: json.RawMessage(`{"cluster_name":"c","status":"green"}`)}, nil
 }
 
-func (f *fakeElastic) BackendInfo(ctx context.Context, t models.ElasticServer) (models.BackendInfo, error) {
-	return models.BackendInfo{Type: "elasticsearch", Version: "9.4.3"}, nil
+func (f *fakeElastic) BackendInfo(ctx context.Context, t domain.ElasticServer) (domain.BackendInfo, error) {
+	return domain.BackendInfo{Type: "elasticsearch", Version: "9.4.3"}, nil
 }
 
 // newServerEngine returns handlers + config for NewServer with the given
@@ -78,9 +78,9 @@ func newServerEngine(t *testing.T, authType string) (*handlers.Handlers, *config
 	return h, cfg
 }
 
-func envelope(t *testing.T, body []byte) models.Response {
+func envelope(t *testing.T, body []byte) domain.Response {
 	t.Helper()
-	var env models.Response
+	var env domain.Response
 	if err := json.Unmarshal(body, &env); err != nil {
 		t.Fatalf("unmarshal envelope: %v (body %q)", err, body)
 	}

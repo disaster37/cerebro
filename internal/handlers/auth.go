@@ -7,7 +7,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 
 	"cerebro/internal/auth"
-	"cerebro/internal/models"
+	"cerebro/internal/domain"
 )
 
 func (h *Handlers) AuthLogin(ctx context.Context, c *app.RequestContext) {
@@ -15,7 +15,7 @@ func (h *Handlers) AuthLogin(ctx context.Context, c *app.RequestContext) {
 	password := string(c.FormValue("password"))
 
 	if user == "" || password == "" {
-		c.JSON(http.StatusOK, models.ErrorResponse(400, "invalid login form data"))
+		c.JSON(http.StatusOK, domain.ErrorResponse(400, "invalid login form data"))
 		return
 	}
 
