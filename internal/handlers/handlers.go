@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"cerebro/internal/config"
-	"cerebro/internal/dao"
+	"cerebro/internal/repository"
 	"cerebro/internal/domain"
 	"cerebro/internal/elastic"
 )
@@ -18,7 +18,7 @@ type Handlers struct {
 	Auth    domain.AuthService
 	Hosts   *config.Hosts
 	Elastic elastic.ElasticClient
-	History *dao.SQLiteDAO
+	History *repository.SQLiteHistoryRepository
 	HistMax int
 	Log     *logrus.Logger
 	Secret  string

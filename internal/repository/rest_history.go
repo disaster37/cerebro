@@ -1,4 +1,4 @@
-package dao
+package repository
 
 import (
 	"time"
@@ -6,7 +6,7 @@ import (
 	"cerebro/internal/domain"
 )
 
-func (d *SQLiteDAO) AllHistory(username string) ([]domain.RestRequest, error) {
+func (d *SQLiteHistoryRepository) AllHistory(username string) ([]domain.RestRequest, error) {
 	rows, err := d.db.Query(
 		"SELECT path, method, body, username, created_at FROM rest_requests WHERE username=? ORDER BY created_at DESC",
 		username,
@@ -29,7 +29,7 @@ func (d *SQLiteDAO) AllHistory(username string) ([]domain.RestRequest, error) {
 	return out, rows.Err()
 }
 
-func (d *SQLiteDAO) SaveHistory(req domain.RestRequest, max int) (string, error) {
+func (d *SQLiteHistoryRepository) SaveHistory(req domain.RestRequest, max int) (string, error) {
 	md5sum := req.MD5()
 
 	var existingID int
@@ -57,7 +57,7 @@ func (d *SQLiteDAO) SaveHistory(req domain.RestRequest, max int) (string, error)
 	return md5sum, nil
 }
 
-func (d *SQLiteDAO) ClearHistory(username string) (int64, error) {
+func (d *SQLiteHistoryRepository) ClearHistory(username string) (int64, error) {
 	res, err := d.db.Exec("DELETE FROM rest_requests WHERE username=?", username)
 	if err != nil {
 		return 0, err

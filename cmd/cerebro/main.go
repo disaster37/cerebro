@@ -9,7 +9,7 @@ import (
 
 	"cerebro/internal/auth"
 	"cerebro/internal/config"
-	"cerebro/internal/dao"
+	"cerebro/internal/repository"
 	"cerebro/internal/elastic"
 	"cerebro/internal/handlers"
 	"cerebro/internal/server"
@@ -51,9 +51,9 @@ func run(c *cli.Context) error {
 	log := logrus.New()
 	log.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
 
-	var hist *dao.SQLiteDAO
+	var hist *repository.SQLiteHistoryRepository
 	if cfg.DataPath != "" {
-		hist, err = dao.NewSQLiteDAO(cfg.DataPath)
+		hist, err = repository.NewSQLiteHistoryRepository(cfg.DataPath)
 		if err != nil {
 			return err
 		}
