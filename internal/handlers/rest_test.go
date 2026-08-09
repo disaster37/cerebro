@@ -12,13 +12,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"cerebro/internal/config"
-	"cerebro/internal/elastic"
 	"cerebro/internal/domain"
 )
 
 // execFake records the ExecuteRequest arguments; unstubbed methods panic.
 type execFake struct {
-	elastic.ElasticClient
+	domain.ElasticClient
 	method string
 	path   string
 	data   json.RawMessage
@@ -129,7 +128,7 @@ func TestRestHistoryWithoutDAO(t *testing.T) {
 
 // captureFake records the target seen by ClusterHealth; unstubbed methods panic.
 type captureFake struct {
-	elastic.ElasticClient
+	domain.ElasticClient
 	got domain.ElasticServer
 }
 

@@ -12,7 +12,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"cerebro/internal/config"
-	"cerebro/internal/elastic"
 	"cerebro/internal/domain"
 )
 
@@ -20,7 +19,7 @@ import (
 // the embedded nil interface panics if any unstubbed method is called, which
 // is correct for a test double.
 type fakeElastic struct {
-	elastic.ElasticClient
+	domain.ElasticClient
 	health *domain.Response
 	info   domain.BackendInfo
 }

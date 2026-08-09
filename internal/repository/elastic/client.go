@@ -17,65 +17,11 @@ import (
 	"cerebro/internal/domain"
 )
 
-type ElasticClient interface {
-	Main(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	ClusterState(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	IndicesStats(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	NodesStats(stats []string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	NodeStats(node string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	IndexStats(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	ClusterSettings(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	Aliases(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	ClusterHealth(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	Nodes(flags []string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	CloseIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	OpenIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	RefreshIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	FlushIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	ForceMerge(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	ClearIndexCache(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	DeleteIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetIndexSettings(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetIndexSettingsFlat(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetIndexMapping(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	PutClusterSettings(body string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	EnableShardAllocation(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	DisableShardAllocation(kind string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetShardStats(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	RelocateShard(shard int, index, from, to string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetIndexRecovery(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetClusterMapping(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetAliases(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	UpdateAliases(changes json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetIndexMetadata(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	CreateIndex(index string, metadata json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetIndices(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetTemplates(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	CreateTemplate(name string, template json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	DeleteTemplate(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetNodes(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	AnalyzeTextByField(index, field, text string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	AnalyzeTextByAnalyzer(index, analyzer, text string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetClusterSettingsFlat(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetRepositories(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	CreateRepository(name, repoType string, settings json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	DeleteRepository(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	GetSnapshots(repository string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	DeleteSnapshot(repository, snapshot string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	CreateSnapshot(repository, snapshot string, ignoreUnavailable, includeGlobalState bool, indices string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	RestoreSnapshot(repository, snapshot string, renamePattern, renameReplacement string, ignoreUnavailable, includeAliases, includeGlobalState bool, indices string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	SaveClusterSettings(settings json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	UpdateIndexSettings(index string, settings json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	CatRequest(api string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	CatMaster(ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	ExecuteRequest(method, path string, data json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error)
-	// BackendInfo returns the resolved backend flavor/version of the target.
-	BackendInfo(ctx context.Context, target domain.ElasticServer) (domain.BackendInfo, error)
-}
-
 type Client struct {
 	es *elasticsearch.Client
 }
+
+var _ domain.ElasticClient = (*Client)(nil)
 
 func NewClient(gzip bool) (*Client, error) {
 	transport := newTargetTransport(&http.Client{Timeout: 30 * time.Second}, gzip)

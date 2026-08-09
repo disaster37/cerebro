@@ -9,15 +9,14 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"cerebro/internal/config"
-	"cerebro/internal/repository"
 	"cerebro/internal/domain"
-	"cerebro/internal/elastic"
+	"cerebro/internal/repository"
 )
 
 type Handlers struct {
 	Auth    domain.AuthService
 	Hosts   *config.Hosts
-	Elastic elastic.ElasticClient
+	Elastic domain.ElasticClient
 	History *repository.SQLiteHistoryRepository
 	HistMax int
 	Log     *logrus.Logger

@@ -12,7 +12,8 @@ import (
 	"os"
 	"time"
 
-	"cerebro/internal/elastic"
+	"cerebro/internal/domain"
+	"cerebro/internal/repository/elastic"
 )
 
 // ESURL returns the Elasticsearch endpoint (env ELASTICSEARCH_URL, default
@@ -64,6 +65,6 @@ func WaitForEndpoint(ctx context.Context, url string, timeout time.Duration) err
 }
 
 // NewAcceptanceClient builds the production dual-client router (gzip off).
-func NewAcceptanceClient() (elastic.ElasticClient, error) {
+func NewAcceptanceClient() (domain.ElasticClient, error) {
 	return elastic.NewMultiClient(false)
 }

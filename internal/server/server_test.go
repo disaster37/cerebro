@@ -16,7 +16,6 @@ import (
 
 	"cerebro/internal/auth"
 	"cerebro/internal/config"
-	"cerebro/internal/elastic"
 	"cerebro/internal/handlers"
 	"cerebro/internal/domain"
 )
@@ -24,7 +23,7 @@ import (
 // fakeElastic satisfies the ElasticClient interface for the two methods the
 // navbar exercises; the embedded interface panics on anything else.
 type fakeElastic struct {
-	elastic.ElasticClient
+	domain.ElasticClient
 }
 
 func (f *fakeElastic) ClusterHealth(ctx context.Context, t domain.ElasticServer) (*domain.Response, error) {

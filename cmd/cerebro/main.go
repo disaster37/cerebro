@@ -10,7 +10,7 @@ import (
 	"cerebro/internal/auth"
 	"cerebro/internal/config"
 	"cerebro/internal/repository"
-	"cerebro/internal/elastic"
+	"cerebro/internal/repository/elastic"
 	"cerebro/internal/handlers"
 	"cerebro/internal/server"
 )

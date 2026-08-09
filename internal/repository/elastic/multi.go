@@ -18,9 +18,13 @@ import (
 
 const placeholderURL = "http://placeholder.invalid:9200"
 
-// MultiClient implements ElasticClient by routing each call to the ES engine
-// (go-elasticsearch v9 / esapi) or the OS engine (disaster37/opensearch v4)
-// based on the resolved flavor of the per-request target.
+// MultiClient implements domain.ElasticClient by routing each call to the ES
+// engine (go-elasticsearch v9 / esapi) or the OS engine (disaster37/opensearch
+// v4) based on the resolved flavor of the per-request target.
+//
+// This is an API gateway/adapter: it returns *domain.Response (the raw
+// {status,body} envelope) unchanged — there is no storage schema to map, so
+// the "translation" is identity (pass-through).
 type MultiClient struct {
 	es        *Client          // existing esapi-backed engine (unchanged internals)
 	os        *osClient        // new resty-backed engine
@@ -66,6 +70,8 @@ func NewMultiClient(gzip bool) (*MultiClient, error) {
 		log:       logrus.StandardLogger(),
 	}, nil
 }
+
+var _ domain.ElasticClient = (*MultiClient)(nil)
 
 // detect issues a raw GET / through the shared targetTransport directly — not
 // through either client engine (avoids the go-elasticsearch product check on
@@ -147,9 +153,9 @@ func (m *MultiClient) BackendInfo(ctx context.Context, target domain.ElasticServ
 	return domain.BackendInfo{Type: string(info.Flavor), Version: info.Version}, nil
 }
 
-// engine returns the appropriate ElasticClient for the target's resolved flavor.
-// Both *Client and *osClient satisfy the ElasticClient interface.
-func (m *MultiClient) engine(ctx context.Context, target domain.ElasticServer) ElasticClient {
+// engine returns the appropriate domain.ElasticClient for the target's resolved flavor.
+// Both *Client and *osClient satisfy the domain.ElasticClient interface.
+func (m *MultiClient) engine(ctx context.Context, target domain.ElasticServer) domain.ElasticClient {
 	if m.isOpenSearch(ctx, target) {
 		return m.os
 	}

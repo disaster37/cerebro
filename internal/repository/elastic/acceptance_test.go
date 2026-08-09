@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"cerebro/internal/elastic"
 	"cerebro/internal/domain"
+	"cerebro/internal/repository/elastic"
 	"cerebro/internal/testutil"
 )
 
