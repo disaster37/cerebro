@@ -9,10 +9,12 @@ import (
 
 	"cerebro/internal/auth"
 	"cerebro/internal/config"
+	"cerebro/internal/domain"
+	"cerebro/internal/handler"
 	"cerebro/internal/repository"
-	"cerebro/internal/repository/elastic"
-	"cerebro/internal/handlers"
+	elastic "cerebro/internal/repository/elastic"
 	"cerebro/internal/server"
+	"cerebro/internal/service"
 )
 
 func main() {
@@ -51,13 +53,18 @@ func run(c *cli.Context) error {
 	log := logrus.New()
 	log.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
 
-	var hist *repository.SQLiteHistoryRepository
+	// repository: optional REST history (nil interface when data.path unset).
+	// Assign only inside the branch so a nil concrete pointer is never stuffed
+	// into the interface (which would make it non-nil and break the
+	// s.history == nil guard in RestService).
+	var historyRepo domain.RestHistoryRepository
 	if cfg.DataPath != "" {
-		hist, err = repository.NewSQLiteHistoryRepository(cfg.DataPath)
+		r, err := repository.NewSQLiteHistoryRepository(cfg.DataPath)
 		if err != nil {
 			return err
 		}
-		defer func() { _ = hist.Close() }()
+		defer func() { _ = r.Close() }()
+		historyRepo = r
 	}
 
 	authSvc, err := auth.NewAuthService(cfg.Auth)
@@ -86,14 +93,47 @@ func run(c *cli.Context) error {
 		return err
 	}
 
-	h := &handlers.Handlers{
-		Auth:    authSvc,
-		Hosts:   hosts,
-		Elastic: esClient,
-		History: hist,
-		HistMax: cfg.RestHistorySize,
-		Log:     log,
-		Secret:  cfg.Secret,
+	// services (built inside-out; esClient satisfies every narrow capability
+	// interface since *elastic.MultiClient implements domain.ElasticClient).
+	connectSvc := service.NewConnectService(esClient)
+	overviewSvc := service.NewOverviewService(esClient, esClient, esClient)
+	nodesSvc := service.NewNodesService(esClient, esClient)
+	navbarSvc := service.NewNavbarService(esClient)
+	restSvc := service.NewRestService(esClient, esClient, historyRepo, cfg.RestHistorySize)
+	aliasesSvc := service.NewAliasesService(esClient)
+	analysisSvc := service.NewAnalysisService(esClient, esClient)
+	catSvc := service.NewCatService(esClient)
+	clusterChangesSvc := service.NewClusterChangesService(esClient)
+	clusterSettingsSvc := service.NewClusterSettingsService(esClient)
+	commonsSvc := service.NewCommonsService(esClient, esClient)
+	createIndexSvc := service.NewCreateIndexService(esClient)
+	indexSettingsSvc := service.NewIndexSettingsService(esClient)
+	repositoriesSvc := service.NewRepositoriesService(esClient)
+	snapshotsSvc := service.NewSnapshotsService(esClient, esClient)
+	templatesSvc := service.NewTemplatesService(esClient)
+
+	h := &handler.Handlers{
+		Auth:   authSvc,
+		Hosts:  hosts,
+		Log:    log,
+		Secret: cfg.Secret,
+
+		Connect:         connectSvc,
+		Overview:        overviewSvc,
+		Nodes:           nodesSvc,
+		Navbar:          navbarSvc,
+		Rest:            restSvc,
+		Aliases:         aliasesSvc,
+		Analysis:        analysisSvc,
+		Cat:             catSvc,
+		ClusterChanges:  clusterChangesSvc,
+		ClusterSettings: clusterSettingsSvc,
+		Commons:         commonsSvc,
+		CreateIndex:     createIndexSvc,
+		IndexSettings:   indexSettingsSvc,
+		Repositories:    repositoriesSvc,
+		Snapshots:       snapshotsSvc,
+		Templates:       templatesSvc,
 	}
 
 	srv := server.NewServer(c.Int("port"), cfg, h)

@@ -1,4 +1,4 @@
-package handlers
+package handler
 
 import (
 	"context"
@@ -8,19 +8,39 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/sirupsen/logrus"
 
-	"cerebro/internal/config"
 	"cerebro/internal/domain"
-	"cerebro/internal/repository"
+	"cerebro/internal/service"
 )
 
+// HostResolver resolves a configured target host by name. Satisfied by
+// *config.Hosts so handler does not import config.
+type HostResolver interface {
+	GetHost(name string) (domain.Host, bool)
+	GetHostNames() []string
+}
+
 type Handlers struct {
-	Auth    domain.AuthService
-	Hosts   *config.Hosts
-	Elastic domain.ElasticClient
-	History *repository.SQLiteHistoryRepository
-	HistMax int
-	Log     *logrus.Logger
-	Secret  string
+	Auth   domain.AuthService
+	Hosts  HostResolver
+	Log    *logrus.Logger
+	Secret string
+
+	Connect         *service.ConnectService
+	Overview        *service.OverviewService
+	Nodes           *service.NodesService
+	Navbar          *service.NavbarService
+	Rest            *service.RestService
+	Aliases         *service.AliasesService
+	Analysis        *service.AnalysisService
+	Cat             *service.CatService
+	ClusterChanges  *service.ClusterChangesService
+	ClusterSettings *service.ClusterSettingsService
+	Commons         *service.CommonsService
+	CreateIndex     *service.CreateIndexService
+	IndexSettings   *service.IndexSettingsService
+	Repositories    *service.RepositoriesService
+	Snapshots       *service.SnapshotsService
+	Templates       *service.TemplatesService
 }
 
 type Processor func(ctx context.Context, req domain.CerebroRequest) (domain.Response, error)

@@ -1,4 +1,4 @@
-package handlers
+package handler
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	"cerebro/internal/config"
 	"cerebro/internal/domain"
+	"cerebro/internal/service"
 )
 
 // fakeElastic satisfies the full ElasticClient interface without 50 stubs:
@@ -42,7 +43,7 @@ func newNavbarHandlers(t *testing.T, fake *fakeElastic) *Handlers {
 	}
 	return &Handlers{
 		Hosts:   hosts,
-		Elastic: fake,
+		Navbar:  service.NewNavbarService(fake),
 		Log:     logrus.New(),
 		Secret:  "test-secret",
 	}

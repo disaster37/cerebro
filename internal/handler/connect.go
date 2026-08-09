@@ -1,4 +1,4 @@
-package handlers
+package handler
 
 import (
 	"context"
@@ -20,11 +20,5 @@ func (h *Handlers) ConnectIndex(ctx context.Context, c *app.RequestContext) {
 }
 
 func (h *Handlers) ConnectConnect(ctx context.Context, c *app.RequestContext) {
-	h.process(ctx, c, func(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-		resp, err := h.Elastic.ExecuteRequest("GET", "/_cluster/health", nil, ctx, req.Target)
-		if err != nil {
-			return domain.ErrorResponse(502, err.Error()), nil
-		}
-		return *resp, nil
-	})
+	h.process(ctx, c, h.Connect.Connect)
 }

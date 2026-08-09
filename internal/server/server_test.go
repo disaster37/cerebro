@@ -16,8 +16,9 @@ import (
 
 	"cerebro/internal/auth"
 	"cerebro/internal/config"
-	"cerebro/internal/handlers"
 	"cerebro/internal/domain"
+	"cerebro/internal/handler"
+	"cerebro/internal/service"
 )
 
 // fakeElastic satisfies the ElasticClient interface for the two methods the
@@ -37,7 +38,7 @@ func (f *fakeElastic) BackendInfo(ctx context.Context, t domain.ElasticServer) (
 // newServerEngine returns handlers + config for NewServer with the given
 // auth type, in a temp CWD that contains a minimal SPA shell so
 // c.File("output/public/index.html") resolves.
-func newServerEngine(t *testing.T, authType string) (*handlers.Handlers, *config.Config) {
+func newServerEngine(t *testing.T, authType string) (*handler.Handlers, *config.Config) {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -67,12 +68,12 @@ func newServerEngine(t *testing.T, authType string) (*handlers.Handlers, *config
 	if err != nil {
 		t.Fatalf("NewHosts: %v", err)
 	}
-	h := &handlers.Handlers{
-		Auth:    authSvc,
-		Hosts:   hosts,
-		Elastic: &fakeElastic{},
-		Log:     logrus.New(),
-		Secret:  cfg.Secret,
+	h := &handler.Handlers{
+		Auth:   authSvc,
+		Hosts:  hosts,
+		Navbar: service.NewNavbarService(&fakeElastic{}),
+		Log:    logrus.New(),
+		Secret: cfg.Secret,
 	}
 	return h, cfg
 }

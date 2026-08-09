@@ -11,7 +11,7 @@ import (
 
 	"cerebro/internal/auth"
 	"cerebro/internal/config"
-	"cerebro/internal/handlers"
+	"cerebro/internal/handler"
 )
 
 // NewServer builds the Hertz engine. Route scoping for auth mirrors the
@@ -23,7 +23,7 @@ import (
 // AFTER the call, so the public routes are registered first, then the auth
 // middleware is installed, then the protected routes. With auth disabled the
 // middleware is a no-op and behavior is identical to pre-auth wiring.
-func NewServer(port int, cfg *config.Config, h *handlers.Handlers) *server.Hertz {
+func NewServer(port int, cfg *config.Config, h *handler.Handlers) *server.Hertz {
 	addr := fmt.Sprintf(":%d", port)
 	srv := server.Default(
 		server.WithHostPorts(addr),

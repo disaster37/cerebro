@@ -1,4 +1,4 @@
-package handlers
+package handler
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	"cerebro/internal/config"
 	"cerebro/internal/domain"
+	"cerebro/internal/service"
 )
 
 // execFake records the ExecuteRequest arguments; unstubbed methods panic.
@@ -94,10 +95,10 @@ func newRestHandlers(t *testing.T, fake *execFake) *Handlers {
 		t.Fatalf("NewHosts: %v", err)
 	}
 	return &Handlers{
-		Hosts:   hosts,
-		Elastic: fake,
-		Log:     logrus.New(),
-		Secret:  "test-secret",
+		Hosts:  hosts,
+		Rest:  service.NewRestService(fake, fake, nil, 0),
+		Log:   logrus.New(),
+		Secret: "test-secret",
 	}
 }
 
@@ -154,10 +155,10 @@ func TestPerRequestCredentialsDoNotMutateRegistry(t *testing.T) {
 	}
 	fake := &captureFake{}
 	h := &Handlers{
-		Hosts:   hosts,
-		Elastic: fake,
-		Log:     logrus.New(),
-		Secret:  "test-secret",
+		Hosts:  hosts,
+		Navbar: service.NewNavbarService(fake),
+		Log:    logrus.New(),
+		Secret: "test-secret",
 	}
 
 	engine := route.NewEngine(hertzconfig.NewOptions(nil))
