@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 
 	"cerebro/internal/domain"
 )
@@ -17,14 +18,7 @@ func NewAnalysisService(indices domain.IndexAPI, analysis domain.AnalysisAPI) *A
 
 func (s *AnalysisService) GetIndices(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
 	resp, err := s.indices.GetIndices(ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	body, err := domain.OpenIndices(resp.Body)
-	if err != nil {
-		return domain.ErrorResponse(500, err.Error()), nil
-	}
-	return domain.NewResponse(resp.Status, body), nil
+	return transform(resp, err, domain.OpenIndices)
 }
 
 func (s *AnalysisService) GetIndexAnalyzers(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -33,14 +27,9 @@ func (s *AnalysisService) GetIndexAnalyzers(ctx context.Context, req domain.Cere
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
 	resp, err := s.indices.GetIndexSettings(index, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	body, err := domain.IndexAnalyzers(index, resp.Body)
-	if err != nil {
-		return domain.ErrorResponse(500, err.Error()), nil
-	}
-	return domain.NewResponse(resp.Status, body), nil
+	return transform(resp, err, func(body json.RawMessage) (json.RawMessage, error) {
+		return domain.IndexAnalyzers(index, body)
+	})
 }
 
 func (s *AnalysisService) GetIndexFields(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -49,14 +38,9 @@ func (s *AnalysisService) GetIndexFields(ctx context.Context, req domain.Cerebro
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
 	resp, err := s.indices.GetIndexMapping(index, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	body, err := domain.IndexFields(index, resp.Body)
-	if err != nil {
-		return domain.ErrorResponse(500, err.Error()), nil
-	}
-	return domain.NewResponse(resp.Status, body), nil
+	return transform(resp, err, func(body json.RawMessage) (json.RawMessage, error) {
+		return domain.IndexFields(index, body)
+	})
 }
 
 func (s *AnalysisService) AnalyzeByField(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -73,14 +57,7 @@ func (s *AnalysisService) AnalyzeByField(ctx context.Context, req domain.Cerebro
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
 	resp, err := s.analysis.AnalyzeTextByField(index, field, text, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	body, err := domain.Tokens(resp.Body)
-	if err != nil {
-		return domain.ErrorResponse(500, err.Error()), nil
-	}
-	return domain.NewResponse(resp.Status, body), nil
+	return transform(resp, err, domain.Tokens)
 }
 
 func (s *AnalysisService) AnalyzeByAnalyzer(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -97,12 +74,5 @@ func (s *AnalysisService) AnalyzeByAnalyzer(ctx context.Context, req domain.Cere
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
 	resp, err := s.analysis.AnalyzeTextByAnalyzer(index, analyzer, text, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	body, err := domain.Tokens(resp.Body)
-	if err != nil {
-		return domain.ErrorResponse(500, err.Error()), nil
-	}
-	return domain.NewResponse(resp.Status, body), nil
+	return transform(resp, err, domain.Tokens)
 }

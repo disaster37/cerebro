@@ -15,15 +15,7 @@ func NewIndexSettingsService(indices domain.IndexAPI) *IndexSettingsService {
 }
 
 func (s *IndexSettingsService) Get(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	index, err := req.Get("index")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
-	}
-	resp, err := s.indices.GetIndexSettingsFlat(index, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forwardOp(ctx, req, "index", s.indices.GetIndexSettingsFlat)
 }
 
 func (s *IndexSettingsService) Update(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -35,9 +27,5 @@ func (s *IndexSettingsService) Update(ctx context.Context, req domain.CerebroReq
 	if err != nil {
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
-	resp, err := s.indices.UpdateIndexSettings(index, settings, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.indices.UpdateIndexSettings(index, settings, ctx, req.Target))
 }

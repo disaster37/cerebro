@@ -93,47 +93,31 @@ func run(c *cli.Context) error {
 		return err
 	}
 
-	// services (built inside-out; esClient satisfies every narrow capability
-	// interface since *elastic.MultiClient implements domain.ElasticClient).
-	connectSvc := service.NewConnectService(esClient)
-	overviewSvc := service.NewOverviewService(esClient, esClient, esClient)
-	nodesSvc := service.NewNodesService(esClient, esClient)
-	navbarSvc := service.NewNavbarService(esClient)
-	restSvc := service.NewRestService(esClient, esClient, historyRepo, cfg.RestHistorySize)
-	aliasesSvc := service.NewAliasesService(esClient)
-	analysisSvc := service.NewAnalysisService(esClient, esClient)
-	catSvc := service.NewCatService(esClient)
-	clusterChangesSvc := service.NewClusterChangesService(esClient)
-	clusterSettingsSvc := service.NewClusterSettingsService(esClient)
-	commonsSvc := service.NewCommonsService(esClient, esClient)
-	createIndexSvc := service.NewCreateIndexService(esClient)
-	indexSettingsSvc := service.NewIndexSettingsService(esClient)
-	repositoriesSvc := service.NewRepositoriesService(esClient)
-	snapshotsSvc := service.NewSnapshotsService(esClient, esClient)
-	templatesSvc := service.NewTemplatesService(esClient)
-
+	// Services, wired inside-out. esClient is passed for every narrow
+	// capability interface since *elastic.MultiClient implements the full
+	// domain.ElasticClient.
 	h := &handler.Handlers{
 		Auth:   authSvc,
 		Hosts:  hosts,
 		Log:    log,
 		Secret: cfg.Secret,
 
-		Connect:         connectSvc,
-		Overview:        overviewSvc,
-		Nodes:           nodesSvc,
-		Navbar:          navbarSvc,
-		Rest:            restSvc,
-		Aliases:         aliasesSvc,
-		Analysis:        analysisSvc,
-		Cat:             catSvc,
-		ClusterChanges:  clusterChangesSvc,
-		ClusterSettings: clusterSettingsSvc,
-		Commons:         commonsSvc,
-		CreateIndex:     createIndexSvc,
-		IndexSettings:   indexSettingsSvc,
-		Repositories:    repositoriesSvc,
-		Snapshots:       snapshotsSvc,
-		Templates:       templatesSvc,
+		Connect:         service.NewConnectService(esClient),
+		Overview:        service.NewOverviewService(esClient, esClient, esClient),
+		Nodes:           service.NewNodesService(esClient, esClient),
+		Navbar:          service.NewNavbarService(esClient),
+		Rest:            service.NewRestService(esClient, esClient, historyRepo, cfg.RestHistorySize),
+		Aliases:         service.NewAliasesService(esClient),
+		Analysis:        service.NewAnalysisService(esClient, esClient),
+		Cat:             service.NewCatService(esClient),
+		ClusterChanges:  service.NewClusterChangesService(esClient),
+		ClusterSettings: service.NewClusterSettingsService(esClient),
+		Commons:         service.NewCommonsService(esClient, esClient),
+		CreateIndex:     service.NewCreateIndexService(esClient),
+		IndexSettings:   service.NewIndexSettingsService(esClient),
+		Repositories:    service.NewRepositoriesService(esClient),
+		Snapshots:       service.NewSnapshotsService(esClient, esClient),
+		Templates:       service.NewTemplatesService(esClient),
 	}
 
 	srv := server.NewServer(c.Int("port"), cfg, h)

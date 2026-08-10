@@ -16,26 +16,11 @@ func NewTemplatesService(templates domain.TemplateAPI) *TemplatesService {
 
 func (s *TemplatesService) Templates(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
 	resp, err := s.templates.GetTemplates(ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	body, err := domain.Templates(resp.Body)
-	if err != nil {
-		return domain.ErrorResponse(500, err.Error()), nil
-	}
-	return domain.NewResponse(resp.Status, body), nil
+	return transform(resp, err, domain.Templates)
 }
 
 func (s *TemplatesService) Delete(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	name, err := req.Get("name")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
-	}
-	resp, err := s.templates.DeleteTemplate(name, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forwardOp(ctx, req, "name", s.templates.DeleteTemplate)
 }
 
 func (s *TemplatesService) Create(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -47,9 +32,5 @@ func (s *TemplatesService) Create(ctx context.Context, req domain.CerebroRequest
 	if err != nil {
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
-	resp, err := s.templates.CreateTemplate(name, template, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.templates.CreateTemplate(name, template, ctx, req.Target))
 }

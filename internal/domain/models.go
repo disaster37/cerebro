@@ -61,3 +61,6 @@ func ErrorResponse(status int, msg string) Response {
 	body, _ := json.Marshal(map[string]string{"error": msg})
 	return Response{Status: status, Body: body}
 }
+
+// IsSuccess reports whether the ES/OS status carried by the envelope is 2xx.
+func (r Response) IsSuccess() bool { return r.Status >= 200 && r.Status < 300 }

@@ -15,9 +15,5 @@ func NewConnectService(raw domain.RawAPI) *ConnectService {
 }
 
 func (s *ConnectService) Connect(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	resp, err := s.raw.ExecuteRequest("GET", "/_cluster/health", nil, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.raw.ExecuteRequest("GET", "/_cluster/health", nil, ctx, req.Target))
 }

@@ -15,11 +15,7 @@ func NewClusterSettingsService(cluster domain.ClusterAPI) *ClusterSettingsServic
 }
 
 func (s *ClusterSettingsService) Get(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	resp, err := s.cluster.GetClusterSettingsFlat(ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.cluster.GetClusterSettingsFlat(ctx, req.Target))
 }
 
 func (s *ClusterSettingsService) Save(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -27,9 +23,5 @@ func (s *ClusterSettingsService) Save(ctx context.Context, req domain.CerebroReq
 	if err != nil {
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
-	resp, err := s.cluster.SaveClusterSettings(settings, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.cluster.SaveClusterSettings(settings, ctx, req.Target))
 }

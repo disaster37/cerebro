@@ -12,6 +12,8 @@ type SQLiteHistoryRepository struct {
 	db *sql.DB
 }
 
+var _ domain.RestHistoryRepository = (*SQLiteHistoryRepository)(nil)
+
 func NewSQLiteHistoryRepository(path string) (*SQLiteHistoryRepository, error) {
 	db, err := sql.Open("sqlite", path+"?cache=shared&_journal_mode=WAL")
 	if err != nil {
@@ -27,5 +29,3 @@ func NewSQLiteHistoryRepository(path string) (*SQLiteHistoryRepository, error) {
 func (d *SQLiteHistoryRepository) Close() error {
 	return d.db.Close()
 }
-
-var _ domain.RestHistoryRepository = (*SQLiteHistoryRepository)(nil)

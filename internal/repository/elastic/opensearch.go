@@ -23,6 +23,8 @@ type osClient struct {
 	c opensearch.Client // built via opensearch.New; transport swapped to targetTransport
 }
 
+var _ domain.ElasticClient = (*osClient)(nil)
+
 // do executes one raw request against the per-request target and converts the
 // result to the {status,body} envelope.
 //

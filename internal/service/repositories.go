@@ -16,14 +16,7 @@ func NewRepositoriesService(snapshots domain.SnapshotAPI) *RepositoriesService {
 
 func (s *RepositoriesService) Get(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
 	resp, err := s.snapshots.GetRepositories(ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	body, err := domain.Repositories(resp.Body)
-	if err != nil {
-		return domain.ErrorResponse(500, err.Error()), nil
-	}
-	return domain.NewResponse(resp.Status, body), nil
+	return transform(resp, err, domain.Repositories)
 }
 
 func (s *RepositoriesService) Save(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -39,21 +32,9 @@ func (s *RepositoriesService) Save(ctx context.Context, req domain.CerebroReques
 	if err != nil {
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
-	resp, err := s.snapshots.CreateRepository(name, repoType, settings, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.snapshots.CreateRepository(name, repoType, settings, ctx, req.Target))
 }
 
 func (s *RepositoriesService) Delete(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	name, err := req.Get("name")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
-	}
-	resp, err := s.snapshots.DeleteRepository(name, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forwardOp(ctx, req, "name", s.snapshots.DeleteRepository)
 }

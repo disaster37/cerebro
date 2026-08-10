@@ -47,9 +47,9 @@ func (s *RestService) Request(ctx context.Context, req domain.CerebroRequest) (d
 	// executeRequest's JsString handling). Non-string data passes through
 	// unchanged (its JSON encoding is the payload).
 	if len(data) > 0 && data[0] == '"' {
-		var s2 string
-		if json.Unmarshal(data, &s2) == nil {
-			data = json.RawMessage(s2)
+		var str string
+		if json.Unmarshal(data, &str) == nil {
+			data = json.RawMessage(str)
 		}
 	}
 
@@ -58,16 +58,16 @@ func (s *RestService) Request(ctx context.Context, req domain.CerebroRequest) (d
 		return domain.ErrorResponse(502, err.Error()), nil
 	}
 
-	if resp.Status >= 200 && resp.Status < 300 {
+	if resp.IsSuccess() {
 		username := ""
 		if req.User != nil {
 			username = req.User.Name
 		}
 		bodyStr := "{}"
 		if data != nil {
-			var s2 string
-			if json.Unmarshal(data, &s2) == nil {
-				bodyStr = s2
+			var str string
+			if json.Unmarshal(data, &str) == nil {
+				bodyStr = str
 			} else {
 				bodyStr = string(data)
 			}

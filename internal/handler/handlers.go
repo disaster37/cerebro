@@ -19,6 +19,9 @@ type HostResolver interface {
 	GetHostNames() []string
 }
 
+// Handlers is the aggregate HTTP adapter: auth/host/session plumbing plus
+// one field per feature service. The feature methods are one-liner
+// delegations to the services via process.
 type Handlers struct {
 	Auth   domain.AuthService
 	Hosts  HostResolver
@@ -43,8 +46,14 @@ type Handlers struct {
 	Templates       *service.TemplatesService
 }
 
+// Processor is the uniform service-method signature: every service method
+// wired through process is assignable to it, so handlers delegate with a
+// plain method value (h.process(ctx, c, h.Xxx.SomeMethod)).
 type Processor func(ctx context.Context, req domain.CerebroRequest) (domain.Response, error)
 
+// process builds a domain.CerebroRequest from the HTTP request (session
+// user, JSON body, resolved target host with per-request credentials and
+// whitelisted headers), runs fn, and writes the {status, body} envelope.
 func (h *Handlers) process(c context.Context, ctx *app.RequestContext, fn Processor) {
 	var user *domain.User
 	if u, ok := ctx.Get("user"); ok {

@@ -33,7 +33,7 @@ func (s *OverviewService) Index(ctx context.Context, req domain.CerebroRequest) 
 		if err != nil {
 			return domain.ErrorResponse(502, err.Error()), nil
 		}
-		if resp.Status < 200 || resp.Status >= 300 {
+		if !resp.IsSuccess() {
 			body, _ := json.Marshal(map[string]string{"error": "ES request failed"})
 			return domain.Response{Status: resp.Status, Body: body}, nil
 		}
@@ -52,103 +52,42 @@ func (s *OverviewService) DisableShardAllocation(ctx context.Context, req domain
 	if err != nil {
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
-	resp, err := s.cluster.DisableShardAllocation(kind, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.cluster.DisableShardAllocation(kind, ctx, req.Target))
 }
 
 func (s *OverviewService) EnableShardAllocation(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	resp, err := s.cluster.EnableShardAllocation(ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.cluster.EnableShardAllocation(ctx, req.Target))
 }
 
+// The seven index operations below all share one shape: a required "indices"
+// param plus a single client call whose response is forwarded unchanged.
+
 func (s *OverviewService) CloseIndices(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	idx, err := req.Get("indices")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
-	}
-	resp, err := s.indices.CloseIndex(idx, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forwardOp(ctx, req, "indices", s.indices.CloseIndex)
 }
 
 func (s *OverviewService) OpenIndices(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	idx, err := req.Get("indices")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
-	}
-	resp, err := s.indices.OpenIndex(idx, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forwardOp(ctx, req, "indices", s.indices.OpenIndex)
 }
 
 func (s *OverviewService) ForceMerge(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	idx, err := req.Get("indices")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
-	}
-	resp, err := s.indices.ForceMerge(idx, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forwardOp(ctx, req, "indices", s.indices.ForceMerge)
 }
 
 func (s *OverviewService) ClearIndexCache(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	idx, err := req.Get("indices")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
-	}
-	resp, err := s.indices.ClearIndexCache(idx, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forwardOp(ctx, req, "indices", s.indices.ClearIndexCache)
 }
 
 func (s *OverviewService) RefreshIndex(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	idx, err := req.Get("indices")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
-	}
-	resp, err := s.indices.RefreshIndex(idx, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forwardOp(ctx, req, "indices", s.indices.RefreshIndex)
 }
 
 func (s *OverviewService) FlushIndex(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	idx, err := req.Get("indices")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
-	}
-	resp, err := s.indices.FlushIndex(idx, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forwardOp(ctx, req, "indices", s.indices.FlushIndex)
 }
 
 func (s *OverviewService) DeleteIndex(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
-	idx, err := req.Get("indices")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
-	}
-	resp, err := s.indices.DeleteIndex(idx, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forwardOp(ctx, req, "indices", s.indices.DeleteIndex)
 }
 
 func (s *OverviewService) GetShardStats(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -172,10 +111,10 @@ func (s *OverviewService) GetShardStats(ctx context.Context, req domain.CerebroR
 	if err != nil {
 		return domain.ErrorResponse(502, err.Error()), nil
 	}
-	if stats.Status < 200 || stats.Status >= 300 {
+	if !stats.IsSuccess() {
 		return *stats, nil
 	}
-	if recovery.Status < 200 || recovery.Status >= 300 {
+	if !recovery.IsSuccess() {
 		return *recovery, nil
 	}
 	body, err := domain.ShardStats(index, node, shard, stats.Body, recovery.Body)
@@ -202,9 +141,5 @@ func (s *OverviewService) RelocateShard(ctx context.Context, req domain.CerebroR
 	if err != nil {
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
-	resp, err := s.cluster.RelocateShard(shard, index, from, to, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.cluster.RelocateShard(shard, index, from, to, ctx, req.Target))
 }

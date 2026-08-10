@@ -21,14 +21,7 @@ func (s *CreateIndexService) GetIndexMetadata(ctx context.Context, req domain.Ce
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
 	resp, err := s.indices.GetIndexMetadata(index, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	body, err := domain.IndexMetadata(resp.Body)
-	if err != nil {
-		return domain.ErrorResponse(500, err.Error()), nil
-	}
-	return domain.NewResponse(resp.Status, body), nil
+	return transform(resp, err, domain.IndexMetadata)
 }
 
 func (s *CreateIndexService) Execute(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -40,9 +33,5 @@ func (s *CreateIndexService) Execute(ctx context.Context, req domain.CerebroRequ
 	if metadata == nil {
 		metadata = json.RawMessage("{}")
 	}
-	resp, err := s.indices.CreateIndex(index, metadata, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.indices.CreateIndex(index, metadata, ctx, req.Target))
 }

@@ -41,14 +41,7 @@ func (s *SnapshotsService) Load(ctx context.Context, req domain.CerebroRequest) 
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
 	resp, err := s.snapshots.GetSnapshots(repository, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	snapshots, err := domain.Snapshots(resp.Body)
-	if err != nil {
-		return domain.ErrorResponse(500, err.Error()), nil
-	}
-	return domain.NewResponse(resp.Status, snapshots), nil
+	return transform(resp, err, domain.Snapshots)
 }
 
 func (s *SnapshotsService) Delete(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -60,11 +53,7 @@ func (s *SnapshotsService) Delete(ctx context.Context, req domain.CerebroRequest
 	if err != nil {
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
-	resp, err := s.snapshots.DeleteSnapshot(repository, snapshot, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.snapshots.DeleteSnapshot(repository, snapshot, ctx, req.Target))
 }
 
 func (s *SnapshotsService) Create(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -79,11 +68,7 @@ func (s *SnapshotsService) Create(ctx context.Context, req domain.CerebroRequest
 	indices := strings.Join(req.GetStringArray("indices"), ",")
 	ignoreUnavailable, _ := req.GetBool("ignoreUnavailable")
 	includeGlobalState, _ := req.GetBool("includeGlobalState")
-	resp, err := s.snapshots.CreateSnapshot(repository, snapshot, ignoreUnavailable, includeGlobalState, indices, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.snapshots.CreateSnapshot(repository, snapshot, ignoreUnavailable, includeGlobalState, indices, ctx, req.Target))
 }
 
 func (s *SnapshotsService) Restore(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -101,9 +86,5 @@ func (s *SnapshotsService) Restore(ctx context.Context, req domain.CerebroReques
 	ignoreUnavailable, _ := req.GetBool("ignoreUnavailable")
 	includeAliases, _ := req.GetBool("includeAliases")
 	includeGlobalState, _ := req.GetBool("includeGlobalState")
-	resp, err := s.snapshots.RestoreSnapshot(repository, snapshot, renamePattern, renameReplacement, ignoreUnavailable, includeAliases, includeGlobalState, indices, ctx, req.Target)
-	if err != nil {
-		return domain.ErrorResponse(502, err.Error()), nil
-	}
-	return *resp, nil
+	return forward(s.snapshots.RestoreSnapshot(repository, snapshot, renamePattern, renameReplacement, ignoreUnavailable, includeAliases, includeGlobalState, indices, ctx, req.Target))
 }

@@ -96,8 +96,8 @@ func newRestHandlers(t *testing.T, fake *execFake) *Handlers {
 	}
 	return &Handlers{
 		Hosts:  hosts,
-		Rest:  service.NewRestService(fake, fake, nil, 0),
-		Log:   logrus.New(),
+		Rest:   service.NewRestService(fake, fake, nil, 0),
+		Log:    logrus.New(),
 		Secret: "test-secret",
 	}
 }

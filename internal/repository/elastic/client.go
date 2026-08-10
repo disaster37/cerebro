@@ -23,6 +23,10 @@ type Client struct {
 
 var _ domain.ElasticClient = (*Client)(nil)
 
+// NewClient builds a standalone esapi-backed engine.
+//
+// NOTE: currently only used by client_test.go; production builds the Client
+// inside NewMultiClient.
 func NewClient(gzip bool) (*Client, error) {
 	transport := newTargetTransport(&http.Client{Timeout: 30 * time.Second}, gzip)
 	es, err := elasticsearch.NewClient(elasticsearch.Config{ //nolint:staticcheck // SA1019: v9 deprecates Config/NewClient but keeps them fully functional; functional-options migration tracked separately

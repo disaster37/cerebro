@@ -20,21 +20,21 @@ func (s *NodesService) Index(ctx context.Context, req domain.CerebroRequest) (do
 	if err != nil {
 		return domain.ErrorResponse(502, err.Error()), nil
 	}
-	if info.Status < 200 || info.Status >= 300 {
+	if !info.IsSuccess() {
 		return *info, nil
 	}
 	stats, err := s.nodes.NodesStats([]string{"jvm", "fs", "os", "process"}, ctx, req.Target)
 	if err != nil {
 		return domain.ErrorResponse(502, err.Error()), nil
 	}
-	if stats.Status < 200 || stats.Status >= 300 {
+	if !stats.IsSuccess() {
 		return *stats, nil
 	}
 	master, err := s.cat.CatMaster(ctx, req.Target)
 	if err != nil {
 		return domain.ErrorResponse(502, err.Error()), nil
 	}
-	if master.Status < 200 || master.Status >= 300 {
+	if !master.IsSuccess() {
 		return *master, nil
 	}
 	body, err := domain.NodesData(info.Body, stats.Body, master.Body)

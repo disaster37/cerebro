@@ -42,10 +42,10 @@ func newNavbarHandlers(t *testing.T, fake *fakeElastic) *Handlers {
 		t.Fatalf("NewHosts: %v", err)
 	}
 	return &Handlers{
-		Hosts:   hosts,
-		Navbar:  service.NewNavbarService(fake),
-		Log:     logrus.New(),
-		Secret:  "test-secret",
+		Hosts:  hosts,
+		Navbar: service.NewNavbarService(fake),
+		Log:    logrus.New(),
+		Secret: "test-secret",
 	}
 }
 

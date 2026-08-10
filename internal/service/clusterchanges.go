@@ -26,7 +26,7 @@ func (s *ClusterChangesService) Get(ctx context.Context, req domain.CerebroReque
 		if err != nil {
 			return domain.ErrorResponse(502, err.Error()), nil
 		}
-		if resp.Status < 200 || resp.Status >= 300 {
+		if !resp.IsSuccess() {
 			msg := fmt.Sprintf("Failure for [%s]", path)
 			body, _ := json.Marshal(map[string]string{"error": msg})
 			return domain.Response{Status: resp.Status, Body: body}, nil
