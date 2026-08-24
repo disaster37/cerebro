@@ -1,0 +1,12 @@
+apiVersion: v2
+name: cerebro
+description: Cerebro — Elasticsearch/OpenSearch admin UI (Go + Nuxt 4 rewrite)
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - elasticsearch
+  - opensearch
+  - admin
+  - monitoring
+  - cerebro

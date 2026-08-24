@@ -1,25 +1,21 @@
-# Extracted from https://github.com/ulrich/macaron-factory/blob/master/.gitignore
 # Ignore all dotfiles...
 .*
-# except for .gitignore
+# ...except for these
 !.gitignore
-!.eslintrc.json
+!.dockerignore
+!.goreleaser.yml
+!.github/
+!dagger/.gitignore
+!dagger/.gitattributes
 
-# Ignore Play! working directory #
-db
-eclipse
-log
-logs
-modules
-precompiled
-project/project
-project/target
-target
-tmp
-test-result
-server.pid
-*.iml
-*.eml
-activator-*.sbt
 node_modules
-cerebro.db
+
+# Build artifacts
+/cerebro
+server.pid
+dist/
+output/
+build
+
+# Local data
+*.db

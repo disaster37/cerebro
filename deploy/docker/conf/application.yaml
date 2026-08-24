@@ -1,0 +1,33 @@
+# Cerebro compose config.
+# Probe/healthcheck paths below assume the default basePath: "/". If you
+# change basePath, update the Dockerfile HEALTHCHECK and any probes too.
+secret: ""              # overridden by CEREBRO_SECRET env var (see docker-compose.yml)
+basePath: "/"
+data:
+  path: /data/cerebro.db
+rest:
+  history:
+    size: 50
+es:
+  gzip: true
+auth:
+  type: ""
+  settings:
+    username: ""  # set via BASIC_AUTH_USER env var when auth.type=basic
+    # password: set via BASIC_AUTH_PWD env var from your secret store — do NOT put credentials in this file
+    url: ""
+    base-dn: ""
+    method: "simple"
+    user-template: "uid=%s,%s"
+    bind-dn: ""
+    # bind-pw: set via LDAP_BIND_PWD env var from your secret store — do NOT put credentials in this file
+    group-search:
+      base-dn: ""
+      user-attr: ""
+      user-attr-template: ""
+      group: ""
+hosts: []
+#  - host: "http://localhost:9200"
+#    name: "Localhost cluster"
+#    type: "opensearch"          # optional; auto-detected when omitted
+#    headers-whitelist: ["x-proxy-user"]

@@ -1,0 +1,17 @@
+.git
+.github
+.opencode
+.kilo
+dagger
+node_modules
+output
+dist
+build
+/cerebro
+*.db
+server.pid
+.env
+.env.*
+*.pem
+*.key
+*.crt

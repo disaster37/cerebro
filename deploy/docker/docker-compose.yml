@@ -1,0 +1,45 @@
+##############################################################################
+# SECURITY: Authentication is DISABLED by default (auth.type: "").
+# cerebro can proxy HTTP requests to arbitrary hosts (SSRF risk).
+# Do NOT expose this service beyond localhost until auth is enabled
+# and a unique CEREBRO_SECRET is set.
+#
+#   export CEREBRO_SECRET=$(openssl rand -hex 32)
+#   docker compose up -d
+#
+# See conf/application.yaml to configure authentication.
+##############################################################################
+services:
+  cerebro:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile
+    image: cerebro:local
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      CEREBRO_SECRET: ${CEREBRO_SECRET:?CEREBRO_SECRET must be set (e.g. openssl rand -hex 32)}
+      # Auth overrides (uncomment as needed):
+      # AUTH_TYPE: basic
+      # BASIC_AUTH_USER: admin
+      # BASIC_AUTH_PWD: change-me
+      # LDAP_URL / LDAP_BASE_DN / ... see conf/application.yaml
+    volumes:
+      - ./conf/application.yaml:/opt/cerebro/conf/application.yaml:ro
+      - cerebro-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - "no-new-privileges:true"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+volumes:
+  cerebro-data:

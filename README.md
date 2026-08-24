@@ -1,106 +1,111 @@
-Cerebro
-------------
-[![Docker Pulls](https://img.shields.io/docker/pulls/lmenezes/cerebro.svg)](https://hub.docker.com/r/lmenezes/cerebro)
-![build](https://github.com/lmenezes/cerebro/workflows/build/badge.svg?branch=master)
+# Cerebro
 
-cerebro is an open source(MIT License) elasticsearch web admin tool built using Scala, Play Framework, AngularJS and Bootstrap.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/disaster37/cerebro/actions/workflows/ci.yml/badge.svg)](https://github.com/disaster37/cerebro/actions/workflows/ci.yml)
 
-### Requirements
+Cerebro is an open-source (MIT) web admin tool for **Elasticsearch 9** and
+**OpenSearch 3**, built with [Go](https://go.dev) (Hertz) and
+[Vue 3](https://vuejs.org) / [Nuxt 4](https://nuxt.com). It is a from-scratch rewrite of
+the [original Scala/Play/AngularJS project](https://github.com/lmenezes/cerebro).
 
-cerebro needs Java 11 or newer to run.
+## Requirements
 
-### Installation
-- Download from [https://github.com/lmenezes/cerebro/releases](https://github.com/lmenezes/cerebro/releases)
-- Extract files
-- Run bin/cerebro(or bin/cerebro.bat if on Windows)
-- Access on http://localhost:9000
+- **Build time:** Go 1.26 and Node.js 22.
+- **Runtime:** nothing special — a single static binary that serves the bundled UI.
 
-### Chocolatey (Windows)
-
-You can install `cerebro` using [Chocolatey](https://chocolatey.org/):
+## Build
 
 ```sh
-choco install cerebro-es
+# Backend: produces the ./cerebro binary at the repo root
+go build -o cerebro ./cmd/cerebro
+
+# Frontend: installs deps and emits output/public (served by the binary)
+npm ci --legacy-peer-deps && npm run build
 ```
 
-Package creates windows service ```cerebro```.
-Access on http://localhost:9000
+## Run
 
-### Docker
+From the repository root:
 
-You can find the official docker images in the official [docker hub repo](https://hub.docker.com/r/lmenezes/cerebro/).
-
-Visit [cerebro-docker](https://github.com/lmenezes/cerebro-docker) for further information. 
-
-### Configuration
-
-#### HTTP server address and port
-You can run cerebro listening on a different host and port(defaults to 0.0.0.0:9000):
-
-```
-bin/cerebro -Dhttp.port=1234 -Dhttp.address=127.0.0.1
+```sh
+./cerebro
 ```
 
-#### LDAP config
+The server listens on port **9000** by default and reads its configuration from
+`conf/application.yaml`. The binary serves the built UI from `output/public`, so it must
+be launched from the repo root (or wherever `output/public` and `conf/` live).
 
-LDAP can be configured using environment variables. If you typically run cerebro using docker,
-you can pass a file with all the env vars. The file would look like:
+## Configuration
 
-```bash
-# Set it to ldap to activate ldap authorization
-AUTH_TYPE=ldap
+All settings live in [`conf/application.yaml`](conf/application.yaml). The key ones:
 
-# Your ldap url
-LDAP_URL=ldap://exammple.com:389
+| Setting        | Description                                                                 |
+|----------------|-----------------------------------------------------------------------------|
+| `secret`       | Secret used to sign session cookies. **Change it in production.**          |
+| `basePath`     | Path prefix when serving behind a reverse proxy.                           |
+| `data.path`    | Path to the local SQLite database (rest request history).                  |
+| `hosts[]`      | Pre-registered clusters; each entry supports `host`, `name`, optional       |
+|                | `type` (`elasticsearch` \| `opensearch`; auto-detected via `GET /` when     |
+|                | omitted) and `headers-whitelist`.                                          |
+| `auth.type`    | `""` (default, no auth), `basic`, or `ldap`; see `auth.settings.*` for the  |
+|                | corresponding credentials / LDAP parameters.                                |
 
-LDAP_BASE_DN=OU=users,DC=example,DC=com
+See the file itself for the full list and comments.
 
-# Usually method should  be "simple" otherwise, set it to the SASL mechanisms
-LDAP_METHOD=simple
+## Docker
 
-# user-template executes a string.format() operation where
-# username is passed in first, followed by base-dn. Some examples
-#  - %s => leave user untouched
-#  - %s@domain.com => append "@domain.com" to username
-#  - uid=%s,%s => usual case of OpenLDAP
-LDAP_USER_TEMPLATE=%s@example.com
+Pre-built images are published to GitHub Container Registry:
 
-# User identifier that can perform searches
-LDAP_BIND_DN=admin@example.com
-LDAP_BIND_PWD=adminpass
+<!-- versions:start -->
+```sh
+docker pull ghcr.io/disaster37/cerebro:v0.1.0
+```
+<!-- versions:end -->
 
-# Group membership settings (optional)
+- `dev` — built from every push to `main`
+- `dev-<pr-number>` — built for every pull request
+- release tags — built when a GitHub release is published
 
-# If left unset LDAP_BASE_DN will be used
-# LDAP_GROUP_BASE_DN=OU=users,DC=example,DC=com
+To build the image locally:
 
-# Attribute that represent the user, for example uid or mail
-# LDAP_USER_ATTR=mail
-
-# If left unset LDAP_USER_TEMPLATE will be used
-# LDAP_USER_ATTR_TEMPLATE=%s
-
-# Filter that tests membership of the group. If this property is empty then there is no group membership check
-# AD example => memberOf=CN=mygroup,ou=ouofthegroup,DC=domain,DC=com
-# OpenLDAP example => CN=mygroup
-# LDAP_GROUP=memberOf=memberOf=CN=mygroup,ou=ouofthegroup,DC=domain,DC=com
-
+```sh
+docker build -f deploy/docker/Dockerfile -t cerebro:local .
 ```
 
-You can the pass this file as argument using:
+A ready-to-use Compose stack is provided at
+[`deploy/docker/docker-compose.yml`](deploy/docker/docker-compose.yml). It binds to
+`127.0.0.1:9000` and **requires** a `CEREBRO_SECRET` environment variable:
 
-```bash
- docker run -p 9000:9000 --env-file env-ldap  lmenezes/cerebro
+```sh
+export CEREBRO_SECRET=$(openssl rand -hex 32)
+docker compose -f deploy/docker/docker-compose.yml up -d
 ```
 
-There are some examples of configuration in the [examples folder](./examples).
+> **Warning:** Authentication is disabled by default (`auth.type: ""`) and cerebro can
+> proxy HTTP requests to arbitrary hosts (SSRF risk). Do not expose it beyond localhost
+> until auth is enabled and a unique `CEREBRO_SECRET` is set. See `conf/application.yaml`.
 
-#### Other settings
+## Kubernetes / Helm
 
-Other settings are exposed through the **conf/application.conf** file found on the application directory.
+- Helm chart (published as an OCI artifact on every release):
 
-It is also possible to use an alternate configuration file defined on a different location:
-
+<!-- chart-version:start -->
+```sh
+helm install cerebro oci://ghcr.io/disaster37/cerebro-charts/cerebro --version 0.1.0
 ```
-bin/cerebro -Dconfig.file=/some/other/dir/alternate.conf
-```
+<!-- chart-version:end -->
+
+- Raw manifests: [`deploy/kubernetes/`](deploy/kubernetes/) (deployment, service,
+  configmap, secret, pvc, namespace, kustomization).
+- Chart sources: [`deploy/helm/cerebro/`](deploy/helm/cerebro/) — lint with
+  `helm lint deploy/helm/cerebro`.
+
+## Development
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the development setup, build, test, and lint
+instructions.
+
+## Changelog & License
+
+- [CHANGES.md](CHANGES.md)
+- [LICENSE](LICENSE) (MIT)

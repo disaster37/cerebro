@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI (format, lint, build, test, acc tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install Dagger
+        uses: dagger/dagger-for-github@f599d88d336fdf06f01f9bd24b6339954f7ba3e2 # v6.15.1
+      - name: Run pipeline
+        run: dagger call --mod=dagger all --src=. -o dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cerebro-dist
+          path: dist
+
+  docker:
+    name: Publish Docker image
+    needs: ci
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "value=ghcr.io/disaster37/cerebro:${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "value=ghcr.io/disaster37/cerebro:dev-${{ github.event.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=ghcr.io/disaster37/cerebro:dev" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          push: true
+          tags: ${{ steps.tag.outputs.value }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  goreleaser:
+    name: Publish binaries
+    needs: ci
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  helm:
+    name: Publish Helm chart
+    needs: ci
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: azure/setup-helm@v4
+      - name: Package and push chart
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          mkdir -p .helm-dist
+          helm package deploy/helm/cerebro --version "$VERSION" --app-version "$TAG" -d .helm-dist
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io \
+            --username "${{ github.actor }}" --password-stdin
+          helm push .helm-dist/cerebro-*.tgz oci://ghcr.io/disaster37/cerebro-charts
+
+  readme:
+    name: Update README version refs
+    needs: helm
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+      - name: Bump docker and helm versions in README.md
+        run: |
+          python3 - <<'EOF'
+          import re
+          tag = "${{ github.event.release.tag_name }}"
+          semver = tag.lstrip("v")
+          with open("README.md") as f:
+              content = f.read()
+          content, n_docker = re.subn(
+              r"ghcr\.io/disaster37/cerebro:v?[0-9][0-9A-Za-z.\-]*",
+              f"ghcr.io/disaster37/cerebro:{tag}", content)
+          content, n_chart = re.subn(
+              r"(cerebro-charts/cerebro --version )v?[0-9][0-9A-Za-z.\-]*",
+              rf"\g<1>{semver}", content)
+          if n_docker != 1 or n_chart != 1:
+              raise SystemExit(
+                  f"expected 1 docker and 1 chart version ref, "
+                  f"got docker={n_docker} chart={n_chart}")
+          with open("README.md", "w") as f:
+              f.write(content)
+          EOF
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if git diff --cached --quiet; then
+            echo "README.md already up to date"
+          else
+            git commit -m "docs: bump image and chart versions to ${{ github.event.release.tag_name }}"
+            git push
+          fi

@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cerebro-config
+  namespace: cerebro
+  labels:
+    app: cerebro
+    app.kubernetes.io/name: cerebro
+data:
+  application.yaml: |
+    # Cerebro config. The session secret is NOT stored here: it is injected
+    # via the CEREBRO_SECRET env var from the cerebro-secret Secret (see
+    # secret.yaml). cerebro reads this file once at startup; to apply changes
+    # run `kubectl -n cerebro rollout restart deployment/cerebro`.
+    # Probe/healthcheck paths assume the default basePath: "/".
+    secret: ""
+    basePath: "/"
+    data:
+      path: /data/cerebro.db
+    rest:
+      history:
+        size: 50
+    es:
+      gzip: true
+    auth:
+      type: ""
+      settings:
+        username: ""
+        # password: set via BASIC_AUTH_PWD env var from the Secret — do NOT put credentials in ConfigMap
+        url: ""
+        base-dn: ""
+        method: "simple"
+        user-template: "uid=%s,%s"
+        bind-dn: ""
+        # bind-pw: set via LDAP_BIND_PWD env var from the Secret — do NOT put credentials in ConfigMap
+        group-search:
+          base-dn: ""
+          user-attr: ""
+          user-attr-template: ""
+          group: ""
+    hosts: []
+    #  - host: "http://elasticsearch:9200"
+    #    name: "My cluster"
+    #    type: "opensearch"          # optional; auto-detected when omitted
+    #    headers-whitelist: ["x-proxy-user"]

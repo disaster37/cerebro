@@ -1,0 +1,33 @@
+# Secret used to sign session cookies. It is highly recommended to change
+# this value before running cerebro in production (especially with auth
+# enabled): the sample value below is public.
+secret: "ki:s:[[@=Ag?QI`W2jMwkY:eqvrJ]JqoJyi2axj3ZvOvOv^/KavOT4ViJSv?6YY4[N"
+basePath: "/"
+data:
+  path: "./cerebro.db"
+rest:
+  history:
+    size: 50
+es:
+  gzip: true
+auth:
+  type: ""
+  settings:
+    username: ""
+    password: ""
+    url: ""
+    base-dn: ""
+    method: "simple"
+    user-template: "uid=%s,%s"
+    bind-dn: ""
+    bind-pw: ""
+    group-search:
+      base-dn: ""
+      user-attr: ""
+      user-attr-template: ""
+      group: ""
+hosts: []
+#  - host: "http://localhost:9200"
+#    name: "Localhost cluster"
+#    type: "opensearch"          # optional; auto-detected when omitted
+#    headers-whitelist: ["x-proxy-user"]
