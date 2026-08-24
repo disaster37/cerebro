@@ -3,6 +3,7 @@
 # ...except for these
 !.gitignore
 !.dockerignore
+!.goreleaser.yml
 !.github/
 !dagger/.gitignore
 !dagger/.gitattributes

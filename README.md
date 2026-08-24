@@ -54,6 +54,20 @@ See the file itself for the full list and comments.
 
 ## Docker
 
+Pre-built images are published to GitHub Container Registry:
+
+<!-- versions:start -->
+```sh
+docker pull ghcr.io/disaster37/cerebro:v0.1.0
+```
+<!-- versions:end -->
+
+- `dev` — built from every push to `main`
+- `dev-<pr-number>` — built for every pull request
+- release tags — built when a GitHub release is published
+
+To build the image locally:
+
 ```sh
 docker build -f deploy/docker/Dockerfile -t cerebro:local .
 ```
@@ -73,9 +87,17 @@ docker compose -f deploy/docker/docker-compose.yml up -d
 
 ## Kubernetes / Helm
 
+- Helm chart (published as an OCI artifact on every release):
+
+<!-- chart-version:start -->
+```sh
+helm install cerebro oci://ghcr.io/disaster37/cerebro-charts/cerebro --version 0.1.0
+```
+<!-- chart-version:end -->
+
 - Raw manifests: [`deploy/kubernetes/`](deploy/kubernetes/) (deployment, service,
   configmap, secret, pvc, namespace, kustomization).
-- Helm chart: [`deploy/helm/cerebro/`](deploy/helm/cerebro/) — lint with
+- Chart sources: [`deploy/helm/cerebro/`](deploy/helm/cerebro/) — lint with
   `helm lint deploy/helm/cerebro`.
 
 ## Development

@@ -3,7 +3,7 @@
 replicaCount: 1
 
 image:
-  repository: ""           # REQUIRED (template fails when empty)
+  repository: ghcr.io/disaster37/cerebro
   tag: ""                  # defaults to .Chart.AppVersion when empty
   pullPolicy: IfNotPresent
 

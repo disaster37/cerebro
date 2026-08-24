@@ -19,6 +19,13 @@ const (
 
 type Cerebro struct{}
 
+// Format checks Go source formatting with gofmt; fails if any file is unformatted.
+func (c *Cerebro) Format(ctx context.Context, src *dagger.Directory) (string, error) {
+	return c.goBase(src).
+		WithExec([]string{"bash", "-c", "unformatted=$(gofmt -l .); if [ -n \"$unformatted\" ]; then echo 'gofmt needed:'; echo \"$unformatted\"; exit 1; fi"}).
+		Stdout(ctx)
+}
+
 // Lint runs go vet + golangci-lint on the Go backend and eslint on the frontend.
 func (c *Cerebro) Lint(ctx context.Context, src *dagger.Directory) (string, error) {
 	// golangci-lint is installed from the official release tarball with a pinned
@@ -96,13 +103,15 @@ func (c *Cerebro) Build(ctx context.Context, src *dagger.Directory) (*dagger.Dir
 		WithDirectory("public", nuxt), nil
 }
 
-// All runs Lint → UnitTest → FrontendTest → AcceptanceTest → Build in order; fails fast.
+// All runs Format → Lint → UnitTest → FrontendTest → AcceptanceTest → Build in
+// order; fails fast.
 func (c *Cerebro) All(ctx context.Context, src *dagger.Directory) (*dagger.Directory, error) {
 	type step struct {
 		name string
 		fn   func(context.Context, *dagger.Directory) (string, error)
 	}
 	for _, s := range []step{
+		{"format", c.Format},
 		{"lint", c.Lint},
 		{"unit test", c.UnitTest},
 		{"frontend test", c.FrontendTest},
