@@ -63,7 +63,7 @@ const moreLinks = [
 
 // Horizontal nav (desktop). "More" renders its children as a dropdown.
 const navItems = computed(() => {
-  const connect = { label: 'Connect', to: '/connect', slot: 'connect' }
+  const connect = { label: connectLabel.value, to: '/connect', slot: 'connect' }
   if (!clusterName.value) return [connect]
   return [connect, ...primaryLinks, { label: 'More', children: moreLinks }]
 })

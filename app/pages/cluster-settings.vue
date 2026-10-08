@@ -9,7 +9,7 @@
       </div>
       <UButton class="mt-2" @click="save">Save</UButton>
     </div>
-    <div v-else class="flex justify-center p-5">
+    <div v-else class="flex justify-center p-5" role="status" aria-label="Loading">
       <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
     </div>
   </div>

@@ -1,7 +1,7 @@
 <template>
   <div>
     <h4>Overview <small class="text-neutral-500">{{ clusterName }}</small></h4>
-    <div v-if="loading" class="flex justify-center p-5">
+    <div v-if="loading" class="flex justify-center p-5" role="status" aria-label="Loading">
       <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
     </div>
     <div v-else-if="data">
