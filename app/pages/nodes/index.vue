@@ -1,25 +1,14 @@
 <template>
   <div>
     <h4>Nodes</h4>
-    <table class="table table-sm table-striped" v-if="nodes.length">
-      <thead><tr><th>Name</th><th>Role</th><th>CPU</th><th>Heap</th><th>Disk</th><th>Load</th><th>Version</th></tr></thead>
-      <tbody>
-        <tr v-for="n in nodes" :key="n.id" :class="{ 'table-primary': n.current_master }">
-          <td>{{ n.name }}{{ n.current_master ? ' *' : '' }}</td>
-          <td>
-            <span v-if="n.master" class="badge bg-primary">M</span>
-            <span v-if="n.data" class="badge bg-success">D</span>
-            <span v-if="n.ingest" class="badge bg-info">I</span>
-            <span v-if="n.coordinating" class="badge bg-secondary">C</span>
-          </td>
-          <td>{{ n.cpu_percent }}%</td>
-          <td>{{ formatBytes(n.heap?.used) }} / {{ formatBytes(n.heap?.max) }}</td>
-          <td>{{ n.disk?.used_percent }}%</td>
-          <td>{{ n.load_average?.toFixed(2) }}</td>
-          <td>{{ n.es_version }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <UTable :data="nodes" :columns="nodesColumns">
+      <template #role-cell="{ row }">
+        <UBadge v-if="row.original.master" color="primary" variant="solid">M</UBadge>
+        <UBadge v-if="row.original.data" color="success" variant="solid">D</UBadge>
+        <UBadge v-if="row.original.ingest" color="info" variant="solid">I</UBadge>
+        <UBadge v-if="row.original.coordinating" color="neutral" variant="solid">C</UBadge>
+      </template>
+    </UTable>
   </div>
 </template>
 
@@ -27,6 +16,16 @@
 const clusterName = useState<string>('clusterName')
 const { apiCall } = useAPI()
 const nodes = ref<any[]>([])
+
+const nodesColumns = [
+  { id: 'name', header: 'Name', cell: ({ row }: any) => `${row.original.name}${row.original.current_master ? ' *' : ''}` },
+  { id: 'role', header: 'Role' },
+  { accessorKey: 'cpu_percent', header: 'CPU', cell: ({ row }: any) => `${row.original.cpu_percent}%` },
+  { id: 'heap', header: 'Heap', cell: ({ row }: any) => `${formatBytes(row.original.heap?.used)} / ${formatBytes(row.original.heap?.max)}` },
+  { accessorKey: 'disk', header: 'Disk', cell: ({ row }: any) => `${row.original.disk?.used_percent}%` },
+  { id: 'load', header: 'Load', cell: ({ row }: any) => row.original.load_average?.toFixed(2) },
+  { accessorKey: 'es_version', header: 'Version' },
+]
 
 onMounted(async () => {
   const resp = await apiCall('POST', '/nodes', { host: clusterName.value })

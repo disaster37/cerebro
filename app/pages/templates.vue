@@ -1,17 +1,11 @@
 <template>
   <div>
     <h4>Templates</h4>
-    <table class="table table-sm">
-      <thead><tr><th>Name</th><th>Patterns</th><th>Order</th><th>Actions</th></tr></thead>
-      <tbody>
-        <tr v-for="t in templates" :key="t.name">
-          <td>{{ t.name }}</td>
-          <td>{{ t.template?.index_patterns?.join(', ') }}</td>
-          <td>{{ t.template?.order }}</td>
-          <td><button class="btn btn-sm btn-danger" @click="del(t.name)">Delete</button></td>
-        </tr>
-      </tbody>
-    </table>
+    <UTable :data="templates" :columns="templatesColumns">
+      <template #actions-cell="{ row }">
+        <UButton size="sm" color="error" variant="soft" @click="del(row.original.name)">Delete</UButton>
+      </template>
+    </UTable>
   </div>
 </template>
 
@@ -19,6 +13,13 @@
 const clusterName = useState<string>('clusterName')
 const { apiCall } = useAPI()
 const templates = ref<any[]>([])
+
+const templatesColumns = [
+  { accessorKey: 'name', header: 'Name' },
+  { id: 'patterns', header: 'Patterns', cell: ({ row }: any) => row.original.template?.index_patterns?.join(', ') },
+  { id: 'order', header: 'Order', cell: ({ row }: any) => row.original.template?.order },
+  { id: 'actions', header: 'Actions' },
+]
 
 onMounted(async () => {
   const resp = await apiCall('POST', '/templates', { host: clusterName.value })

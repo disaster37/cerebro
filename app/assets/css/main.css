@@ -1,11 +1,7 @@
-:root {
-  --bs-body-bg: #f5f5f5;
-}
-body {
-  padding-top: 60px;
-}
+@import "tailwindcss";
+@import "@nuxt/ui";
+
 pre {
   white-space: pre-wrap;
   word-wrap: break-word;
 }
-.badge-opensearch { background-color: #6610d2; color: #fff; } /* Bootstrap $indigo */
