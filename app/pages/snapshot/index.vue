@@ -1,8 +1,7 @@
 <template>
   <div>
     <h4>Snapshots</h4>
-    <table class="table table-sm"><thead><tr><th>Snapshot</th><th>State</th><th>Indices</th></tr></thead>
-    <tbody><tr v-for="s in snapshots" :key="s.snapshot"><td>{{ s.snapshot }}</td><td>{{ s.state }}</td><td>{{ s.indices?.join(', ') }}</td></tr></tbody></table>
+    <UTable :data="snapshots" :columns="snapshotsColumns" />
   </div>
 </template>
 
@@ -11,6 +10,12 @@ const clusterName = useState<string>('clusterName')
 const { apiCall } = useAPI()
 const snapshots = ref<any[]>([])
 const repos = ref<string[]>([])
+
+const snapshotsColumns = [
+  { accessorKey: 'snapshot', header: 'Snapshot' },
+  { accessorKey: 'state', header: 'State' },
+  { id: 'indices', header: 'Indices', cell: ({ row }: any) => row.original.indices?.join(', ') },
+]
 
 onMounted(async () => {
   const resp = await apiCall('POST', '/snapshots', { host: clusterName.value })

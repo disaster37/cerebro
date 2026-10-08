@@ -1,36 +1,24 @@
 <template>
   <div>
-    <h4>Overview <small class="text-muted">{{ clusterName }}</small></h4>
-    <div v-if="loading" class="text-center p-5">
-      <div class="spinner-border" role="status"></div>
+    <h4>Overview <small class="text-neutral-500">{{ clusterName }}</small></h4>
+    <div v-if="loading" class="flex justify-center p-5">
+      <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
     </div>
     <div v-else-if="data">
-      <div class="row mb-3">
-        <div class="col-md-3" v-for="stat in stats" :key="stat.label">
-          <div class="card">
-            <div class="card-body text-center">
-              <h5 class="card-title">{{ stat.value }}</h5>
-              <small class="text-muted">{{ stat.label }}</small>
-            </div>
-          </div>
-        </div>
+      <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <UCard v-for="stat in stats" :key="stat.label" class="text-center">
+          <p class="text-2xl font-semibold">{{ stat.value }}</p>
+          <p class="text-sm text-neutral-500">{{ stat.label }}</p>
+        </UCard>
       </div>
       <h5>Indices</h5>
-      <table class="table table-sm table-striped">
-        <thead><tr><th>Name</th><th>Docs</th><th>Size</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr v-for="idx in (data.indices || [])" :key="idx.name" :class="{ 'table-warning': idx.unhealthy }">
-            <td>{{ idx.name }}</td>
-            <td>{{ idx.doc_count }}</td>
-            <td>{{ formatBytes(idx.total_size_in_bytes) }}</td>
-            <td>
-              <span v-if="idx.closed" class="badge bg-secondary">closed</span>
-              <span v-else-if="idx.special" class="badge bg-info">system</span>
-              <span v-else class="badge bg-success">open</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <UTable :data="(data.indices || [])" :columns="indicesColumns">
+        <template #status-cell="{ row }">
+          <UBadge v-if="row.original.closed" color="neutral" variant="soft">closed</UBadge>
+          <UBadge v-else-if="row.original.special" color="info" variant="soft">system</UBadge>
+          <UBadge v-else color="success" variant="soft">open</UBadge>
+        </template>
+      </UTable>
     </div>
   </div>
 </template>
@@ -49,6 +37,13 @@ const stats = computed(() => {
     { label: 'Indices', value: data.value.total_indices },
   ]
 })
+
+const indicesColumns = [
+  { accessorKey: 'name', header: 'Name' },
+  { accessorKey: 'doc_count', header: 'Docs' },
+  { id: 'size', header: 'Size', cell: ({ row }: any) => formatBytes(row.original.total_size_in_bytes) },
+  { id: 'status', header: 'Status' },
+]
 
 onMounted(async () => {
   const resp = await apiCall('POST', '/overview', { host: clusterName.value })

@@ -1,29 +1,24 @@
 <template>
   <div>
     <h4>Connect to Elasticsearch / OpenSearch Cluster</h4>
-    <form @submit.prevent="doConnect" class="row g-3 mt-3" style="max-width:600px">
-      <div class="col-12">
-        <label class="form-label">Host</label>
-        <select v-model="selectedHost" class="form-select" @change="onHostChange">
-          <option value="">Select a host...</option>
-          <option v-for="h in hosts" :key="h" :value="h">{{ h }}</option>
-        </select>
+    <form @submit.prevent="doConnect" class="mt-3 grid max-w-2xl gap-4">
+      <UFormField label="Host">
+        <USelect v-model="selectedHost" :items="hosts" placeholder="Select a host..." class="w-full" />
+      </UFormField>
+      <UFormField label="Custom Host URL">
+        <UInput v-model="customHost" placeholder="http://localhost:9200" class="w-full" />
+      </UFormField>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <UFormField label="Username">
+          <UInput v-model="username" class="w-full" />
+        </UFormField>
+        <UFormField label="Password">
+          <UInput v-model="password" type="password" class="w-full" />
+        </UFormField>
       </div>
-      <div class="col-12">
-        <label class="form-label">Custom Host URL</label>
-        <input v-model="customHost" class="form-control" placeholder="http://localhost:9200" />
-      </div>
-      <div class="col-6">
-        <label class="form-label">Username</label>
-        <input v-model="username" class="form-control" />
-      </div>
-      <div class="col-6">
-        <label class="form-label">Password</label>
-        <input v-model="password" type="password" class="form-control" />
-      </div>
-      <div class="col-12">
-        <button class="btn btn-primary" :disabled="connecting">Connect</button>
-        <span v-if="error" class="text-danger ms-2">{{ error }}</span>
+      <div>
+        <UButton type="submit" :loading="connecting">Connect</UButton>
+        <span v-if="error" class="ms-2 text-error-500">{{ error }}</span>
       </div>
     </form>
   </div>
@@ -40,12 +35,6 @@ const connecting = ref(false)
 const error = ref('')
 
 onMounted(() => load())
-
-function onHostChange() {
-  if (selectedHost.value === 'custom') {
-    selectedHost.value = ''
-  }
-}
 
 async function doConnect() {
   const host = customHost.value || selectedHost.value

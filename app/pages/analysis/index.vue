@@ -1,36 +1,20 @@
 <template>
   <div>
     <h4>Analysis</h4>
-    <div class="row mt-3">
-      <div class="col-md-4">
-        <label>Index</label>
-        <select v-model="selectedIndex" class="form-select" @change="onIndexChange">
-          <option value="">Select...</option>
-          <option v-for="idx in indices" :key="idx" :value="idx">{{ idx }}</option>
-        </select>
-      </div>
-      <div class="col-md-4">
-        <label>Field</label>
-        <select v-model="selectedField" class="form-select">
-          <option value="">Select...</option>
-          <option v-for="f in fields" :key="f" :value="f">{{ f }}</option>
-        </select>
-      </div>
-      <div class="col-md-4">
-        <label>Text</label>
-        <input v-model="text" class="form-control" />
-      </div>
+    <div class="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <UFormField label="Index">
+        <USelect v-model="selectedIndex" :items="indices" placeholder="Select..." class="w-full" @update:model-value="onIndexChange" />
+      </UFormField>
+      <UFormField label="Field">
+        <USelect v-model="selectedField" :items="fields" placeholder="Select..." class="w-full" />
+      </UFormField>
+      <UFormField label="Text">
+        <UInput v-model="text" class="w-full" />
+      </UFormField>
     </div>
-    <button class="btn btn-primary mt-3" @click="analyze">Analyze</button>
+    <UButton class="mt-3" @click="analyze">Analyze</UButton>
     <div v-if="tokens" class="mt-3">
-      <table class="table table-sm">
-        <thead><tr><th>Token</th><th>Position</th><th>Type</th></tr></thead>
-        <tbody>
-          <tr v-for="t in tokens" :key="t.token">
-            <td>{{ t.token }}</td><td>{{ t.position }}</td><td>{{ t.type }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <UTable :data="tokens" :columns="tokensColumns" />
     </div>
   </div>
 </template>
@@ -44,6 +28,12 @@ const selectedIndex = ref('')
 const selectedField = ref('')
 const text = ref('')
 const tokens = ref<any[]>([])
+
+const tokensColumns = [
+  { accessorKey: 'token', header: 'Token' },
+  { accessorKey: 'position', header: 'Position' },
+  { accessorKey: 'type', header: 'Type' },
+]
 
 onMounted(async () => {
   const resp = await apiCall('POST', '/analysis/indices', { host: clusterName.value })

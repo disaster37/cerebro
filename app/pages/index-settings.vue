@@ -1,17 +1,17 @@
 <template>
   <div>
     <h4>Index Settings</h4>
-    <div class="row">
-      <div class="col-md-4">
-        <label>Index</label>
-        <input v-model="index" class="form-control" placeholder="my-index" />
-        <button class="btn btn-sm btn-outline-secondary mt-2" @click="load">Load Settings</button>
-      </div>
+    <div class="max-w-sm">
+      <UFormField label="Index">
+        <UInput v-model="index" placeholder="my-index" class="w-full" />
+      </UFormField>
+      <UButton size="sm" color="neutral" variant="outline" class="mt-2" @click="load">Load Settings</UButton>
     </div>
     <div v-if="idxSettings" class="mt-3">
       <div v-for="(val, key) in idxSettings" :key="key" class="mb-2">
-        <label>{{ key }}</label>
-        <input :value="val" class="form-control form-control-sm" />
+        <UFormField :label="key">
+          <UInput :value="val" size="sm" readonly class="w-full" />
+        </UFormField>
       </div>
     </div>
   </div>

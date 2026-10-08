@@ -1,10 +1,10 @@
 <template>
-  <div id="app">
+  <div id="app" class="min-h-screen bg-neutral-50">
     <NavbarComponent />
     <AlertComponent :alerts="alerts" @dismiss="dismissAlert" />
-    <div class="container-fluid mt-3">
+    <main class="mx-auto max-w-7xl px-4 py-6">
       <slot />
-    </div>
+    </main>
   </div>
 </template>
 
