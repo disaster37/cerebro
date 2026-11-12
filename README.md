@@ -58,7 +58,7 @@ Pre-built images are published to GitHub Container Registry:
 
 <!-- versions:start -->
 ```sh
-docker pull ghcr.io/disaster37/cerebro:v0.1.0
+docker pull ghcr.io/disaster37/cerebro:0.1.0
 ```
 <!-- versions:end -->
 
