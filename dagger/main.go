@@ -95,7 +95,7 @@ func (c *Cerebro) Build(ctx context.Context, src *dagger.Directory) (*dagger.Dir
 
 	nuxt := c.nodeBase(src).
 		WithExec([]string{"npm", "ci", "--legacy-peer-deps"}).
-		WithExec([]string{"npm", "run", "build"}).
+		WithExec([]string{"npm", "run", "generate"}).
 		Directory(srcPath + "/output/public")
 
 	return dag.Directory().

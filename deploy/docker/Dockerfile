@@ -19,7 +19,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --legacy-peer-deps
 COPY nuxt.config.ts tsconfig.json ./
 COPY app/ app/
-RUN npm run build            # emits /src/output/public
+RUN npm run generate         # prerenders /src/output/public/index.html
 
 # For reproducible production builds, pin an explicit digest:
 # FROM alpine:3.24@sha256:...
