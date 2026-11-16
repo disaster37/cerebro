@@ -37,7 +37,7 @@ func (f *fakeElastic) BackendInfo(ctx context.Context, t domain.ElasticServer) (
 
 // newServerEngine returns handlers + config for NewServer with the given
 // auth type, in a temp CWD that contains a minimal SPA shell so
-// c.File("output/public/index.html") resolves.
+// ServeFileUncompressed("output/public/index.html") resolves.
 func newServerEngine(t *testing.T, authType string) (*handler.Handlers, *config.Config) {
 	t.Helper()
 
@@ -293,5 +293,94 @@ func TestServerAuthDisabled_BehaviorUnchanged(t *testing.T) {
 	res = w.Result()
 	if res.StatusCode() != http.StatusOK {
 		t.Errorf("GET / HTTP status = %d, want 200", res.StatusCode())
+	}
+}
+
+// TestServerStaticFilesServeWithoutGzipTempFiles guards against Hertz's
+// transparent gzip cache: it writes "*.hertz.gz.tmp" next to the served file,
+// which breaks on the read-only root filesystem used by the Helm/Kubernetes
+// deployments. Static serving must work without any write access to the
+// output directory, even when the client accepts gzip.
+func TestServerStaticFilesServeWithoutGzipTempFiles(t *testing.T) {
+	h, cfg := newServerEngine(t, "")
+	srv := NewServer(0, cfg, h)
+
+	// Drop write permission on the public dir to simulate the read-only
+	// container root filesystem (no-op when tests run as root).
+	publicDir := filepath.Join("output", "public")
+	if err := os.MkdirAll(filepath.Join(publicDir, "_nuxt"), 0o755); err != nil {
+		t.Fatalf("mkdir output/public/_nuxt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(publicDir, "_nuxt", "app.js"), []byte("js"), 0o644); err != nil {
+		t.Fatalf("write app.js: %v", err)
+	}
+	if err := os.Chmod(publicDir, 0o555); err != nil {
+		t.Fatalf("chmod output/public: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(publicDir, 0o755) })
+
+	gzipHeader := ut.Header{Key: "Accept-Encoding", Value: "gzip"}
+
+	// SPA shell on / (ApplicationIndex) with gzip requested.
+	w := ut.PerformRequest(srv.Engine, "GET", "/", nil,
+		ut.Header{Key: "Accept", Value: "text/html"}, gzipHeader)
+	res := w.Result()
+	if res.StatusCode() != http.StatusOK {
+		t.Errorf("GET / HTTP status = %d, want 200", res.StatusCode())
+	}
+	if !strings.Contains(string(res.Body()), "spa") {
+		t.Errorf("GET / body = %q, want the SPA shell", res.Body())
+	}
+
+	// SPA fallback (NoRoute) with gzip requested.
+	w = ut.PerformRequest(srv.Engine, "GET", "/overview", nil,
+		ut.Header{Key: "Accept", Value: "text/html"}, gzipHeader)
+	res = w.Result()
+	if res.StatusCode() != http.StatusOK {
+		t.Errorf("GET /overview HTTP status = %d, want 200", res.StatusCode())
+	}
+	if !strings.Contains(string(res.Body()), "spa") {
+		t.Errorf("GET /overview body = %q, want the SPA shell", res.Body())
+	}
+
+	// StaticFS routes with gzip requested: the original /public asset space and
+	// the /_nuxt prefix referenced by the Nuxt-generated SPA shell.
+	for path, want := range map[string]string{
+		"/public/index.html":   "spa",
+		"/public/_nuxt/app.js": "js",
+		"/_nuxt/app.js":        "js",
+	} {
+		w = ut.PerformRequest(srv.Engine, "GET", path, nil, gzipHeader)
+		res = w.Result()
+		if res.StatusCode() != http.StatusOK {
+			t.Errorf("GET %s HTTP status = %d, want 200", path, res.StatusCode())
+			continue
+		}
+		if !strings.Contains(string(res.Body()), want) {
+			t.Errorf("GET %s body = %q, want %q", path, res.Body(), want)
+		}
+	}
+
+	// The same routes with auth enabled (AuthIndex serves the shell on /login).
+	h2, cfg2 := newServerEngine(t, "basic")
+	srv2 := NewServer(0, cfg2, h2)
+	w = ut.PerformRequest(srv2.Engine, "GET", "/login", nil,
+		ut.Header{Key: "Accept", Value: "text/html"}, gzipHeader)
+	res = w.Result()
+	if res.StatusCode() != http.StatusOK {
+		t.Errorf("GET /login HTTP status = %d, want 200", res.StatusCode())
+	}
+	if !strings.Contains(string(res.Body()), "spa") {
+		t.Errorf("GET /login body = %q, want the SPA shell", res.Body())
+	}
+
+	entries, err := os.ReadDir(publicDir)
+	if err != nil {
+		t.Fatalf("read output/public: %v", err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), ".tmp") {
+			t.Errorf("unexpected gzip cache file %q created", e.Name())
+		}
 	}
 }

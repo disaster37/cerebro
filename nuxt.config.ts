@@ -1,8 +1,5 @@
 export default defineNuxtConfig({
   ssr: false,
-  app: {
-    buildAssetsDir: '/public/_nuxt/',
-  },
   nitro: {
     output: {
       publicDir: 'output/public',

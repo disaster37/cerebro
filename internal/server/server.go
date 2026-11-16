@@ -39,7 +39,17 @@ func NewServer(port int, cfg *config.Config, h *handler.Handlers) *server.Hertz 
 	srv.POST("/auth/logout", h.AuthLogout)
 
 	publicDir := filepath.Join("output", "public")
-	srv.StaticFS("/public", &app.FS{Root: publicDir})
+	// Hertz maps Root + the full request path onto the filesystem, so the
+	// roots below are the parents of their URL prefixes. Compress stays
+	// disabled (the FS zero value): transparent gzip caches its output next
+	// to the served file, which the read-only container root filesystem
+	// forbids.
+	//
+	// /public/* is the original cerebro asset URL space, mapping onto
+	// output/public/*; /_nuxt/* serves the Nuxt build assets that the SPA
+	// shell references.
+	srv.StaticFS("/public", &app.FS{Root: filepath.Join("output")})
+	srv.StaticFS("/_nuxt", &app.FS{Root: publicDir})
 	srv.GET("/favicon.ico", func(ctx context.Context, c *app.RequestContext) {
 		c.Status(http.StatusNoContent)
 	})
@@ -119,7 +129,9 @@ func NewServer(port int, cfg *config.Config, h *handler.Handlers) *server.Hertz 
 	// SPA history-mode fallback: registered after the middleware so deep links
 	// also require a session when auth is enabled.
 	srv.NoRoute(func(ctx context.Context, c *app.RequestContext) {
-		c.File(filepath.Join(publicDir, "index.html"))
+		// Uncompressed: ServeFile's gzip caching needs write access next to
+		// the file, which the read-only container root filesystem forbids.
+		app.ServeFileUncompressed(c, filepath.Join(publicDir, "index.html"))
 	})
 
 	return srv

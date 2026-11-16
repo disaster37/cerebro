@@ -16,7 +16,7 @@ func (h *Handlers) ApplicationIndex(ctx context.Context, c *app.RequestContext) 
 			return
 		}
 	}
-	c.File("output/public/index.html")
+	app.ServeFileUncompressed(c, "output/public/index.html")
 }
 
 func (h *Handlers) AuthIndex(ctx context.Context, c *app.RequestContext) {
@@ -31,5 +31,5 @@ func (h *Handlers) AuthIndex(ctx context.Context, c *app.RequestContext) {
 		c.Redirect(http.StatusFound, []byte("/"))
 		return
 	}
-	c.File("output/public/index.html")
+	app.ServeFileUncompressed(c, "output/public/index.html")
 }
