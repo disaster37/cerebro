@@ -1,7 +1,20 @@
 <template>
   <div>
     <h4>Nodes</h4>
-    <UTable :data="nodes" :columns="nodesColumns">
+    <div v-if="loading" class="flex justify-center p-5" role="status" aria-label="Loading">
+      <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
+    </div>
+    <UCard
+      v-else-if="error"
+      class="mt-3 ring-1 ring-error-200"
+      data-testid="nodes-error"
+    >
+      <p class="mb-3 font-medium text-error-600">{{ error }}</p>
+      <UButton to="/connect" size="sm" color="primary" variant="outline">
+        Connect to Cluster
+      </UButton>
+    </UCard>
+    <UTable v-else-if="nodes.length" :data="nodes" :columns="nodesColumns">
       <template #role-cell="{ row }">
         <UBadge v-if="row.original.master" color="primary" variant="solid">M</UBadge>
         <UBadge v-if="row.original.data" color="success" variant="solid">D</UBadge>
@@ -9,13 +22,20 @@
         <UBadge v-if="row.original.coordinating" color="neutral" variant="solid">C</UBadge>
       </template>
     </UTable>
+    <p v-else class="mt-3 text-sm text-neutral-500">No nodes found.</p>
   </div>
 </template>
 
 <script setup lang="ts">
-const clusterName = useState<string>('clusterName')
+import { onMounted, ref } from 'vue'
+import { extractEnvelopeError, useAPI } from '../../composables/useAPI'
+import { useCluster } from '../../composables/useCluster'
+
+const { clusterHost } = useCluster()
 const { apiCall } = useAPI()
 const nodes = ref<any[]>([])
+const loading = ref(true)
+const error = ref('')
 
 const nodesColumns = [
   { id: 'name', header: 'Name', cell: ({ row }: any) => `${row.original.name}${row.original.current_master ? ' *' : ''}` },
@@ -28,8 +48,23 @@ const nodesColumns = [
 ]
 
 onMounted(async () => {
-  const resp = await apiCall('POST', '/nodes', { host: clusterName.value })
-  if (resp?.status === 200 && Array.isArray(resp.body)) nodes.value = resp.body
+  if (!clusterHost.value) {
+    error.value = 'No active cluster connection. Connect to a cluster first.'
+    loading.value = false
+    return
+  }
+  const resp = await apiCall('POST', '/nodes', { host: clusterHost.value })
+  if (resp?.status === 200 && Array.isArray(resp.body)) {
+    nodes.value = resp.body
+  } else if (resp?.status === 401 || resp?.status === 403) {
+    error.value = `Unauthorized (${resp.status}): cluster rejected the request. Reconnect with valid credentials.`
+  } else {
+    const detail = extractEnvelopeError(resp?.body)
+    error.value = detail
+      ? `Failed to load cluster nodes (${resp?.status || 'network error'}): ${detail}`
+      : `Failed to load cluster nodes (${resp?.status || 'network error'}).`
+  }
+  loading.value = false
 })
 
 function formatBytes(bytes: number): string {

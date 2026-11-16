@@ -10,13 +10,17 @@
 </template>
 
 <script setup lang="ts">
-const clusterName = useState<string>('clusterName')
+import { ref } from 'vue'
+import { useAPI } from '../../composables/useAPI'
+import { useCluster } from '../../composables/useCluster'
+
+const { clusterHost } = useCluster()
 const { apiCall } = useAPI()
 const api = ref('indices')
 const result = ref<any>(null)
 
 async function execute() {
-  const resp = await apiCall('POST', '/cat', { host: clusterName.value, api: api.value })
+  const resp = await apiCall('POST', '/cat', { host: clusterHost.value, api: api.value })
   if (resp?.status === 200) result.value = resp.body
 }
 </script>

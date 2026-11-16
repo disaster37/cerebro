@@ -99,7 +99,7 @@ import { useCluster } from '../composables/useCluster'
 import { useHosts } from '../composables/useHosts'
 
 const { hosts, load } = useHosts()
-const { connect, loadNavbar, lastConnectError } = useCluster()
+const { connect, loadNavbar, lastConnectError, lastConnectStatus } = useCluster()
 
 const selectedHost = ref('')
 const customHost = ref('')
@@ -137,6 +137,8 @@ async function doConnect() {
     navigateTo('/overview')
   } else if (!trustCert.value && /x509:|certificate/i.test(lastConnectError.value || '')) {
     error.value = 'Connection failed: TLS certificate verification failed. Enable "Trust self-signed certificate" if this cluster uses a self-signed certificate.'
+  } else if (lastConnectStatus.value === 401 || lastConnectStatus.value === 403) {
+    error.value = `Connection failed: cluster rejected credentials (${lastConnectStatus.value}). Check username and password.`
   } else {
     error.value = 'Connection failed'
   }

@@ -4,6 +4,16 @@
     <div v-if="loading" class="flex justify-center p-5" role="status" aria-label="Loading">
       <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
     </div>
+    <UCard
+      v-else-if="error"
+      class="mt-3 ring-1 ring-error-200"
+      data-testid="overview-error"
+    >
+      <p class="mb-3 font-medium text-error-600">{{ error }}</p>
+      <UButton to="/connect" size="sm" color="primary" variant="outline">
+        Connect to Cluster
+      </UButton>
+    </UCard>
     <div v-else-if="data">
       <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <UCard v-for="stat in stats" :key="stat.label" class="text-center">
@@ -24,10 +34,16 @@
 </template>
 
 <script setup lang="ts">
-const clusterName = useState<string>('clusterName')
+import { computed, onMounted, ref } from 'vue'
+import { extractEnvelopeError, useAPI } from '../composables/useAPI'
+import { useCluster } from '../composables/useCluster'
+
+const { clusterHost, clusterName } = useCluster()
 const { apiCall } = useAPI()
 const data = ref<any>(null)
 const loading = ref(true)
+const error = ref('')
+
 const stats = computed(() => {
   if (!data.value) return []
   return [
@@ -46,8 +62,22 @@ const indicesColumns = [
 ]
 
 onMounted(async () => {
-  const resp = await apiCall('POST', '/overview', { host: clusterName.value })
-  if (resp?.status === 200) data.value = resp.body
+  if (!clusterHost.value) {
+    error.value = 'No active cluster connection. Connect to a cluster first.'
+    loading.value = false
+    return
+  }
+  const resp = await apiCall('POST', '/overview', { host: clusterHost.value })
+  if (resp?.status === 200) {
+    data.value = resp.body
+  } else if (resp?.status === 401 || resp?.status === 403) {
+    error.value = `Unauthorized (${resp.status}): cluster rejected the request. Reconnect with valid credentials.`
+  } else {
+    const detail = extractEnvelopeError(resp?.body)
+    error.value = detail
+      ? `Failed to load cluster overview (${resp?.status || 'network error'}): ${detail}`
+      : `Failed to load cluster overview (${resp?.status || 'network error'}).`
+  }
   loading.value = false
 })
 

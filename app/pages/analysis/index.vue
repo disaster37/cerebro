@@ -20,7 +20,11 @@
 </template>
 
 <script setup lang="ts">
-const clusterName = useState<string>('clusterName')
+import { onMounted, ref } from 'vue'
+import { useAPI } from '../../composables/useAPI'
+import { useCluster } from '../../composables/useCluster'
+
+const { clusterHost } = useCluster()
 const { apiCall } = useAPI()
 const indices = ref<string[]>([])
 const fields = ref<string[]>([])
@@ -36,19 +40,19 @@ const tokensColumns = [
 ]
 
 onMounted(async () => {
-  const resp = await apiCall('POST', '/analysis/indices', { host: clusterName.value })
+  const resp = await apiCall('POST', '/analysis/indices', { host: clusterHost.value })
   if (resp?.status === 200) indices.value = resp.body || []
 })
 
 async function onIndexChange() {
   if (!selectedIndex.value) return
-  const resp = await apiCall('POST', '/analysis/fields', { host: clusterName.value, index: selectedIndex.value })
+  const resp = await apiCall('POST', '/analysis/fields', { host: clusterHost.value, index: selectedIndex.value })
   if (resp?.status === 200) fields.value = resp.body || []
 }
 
 async function analyze() {
   const resp = await apiCall('POST', '/analysis/analyze/field', {
-    host: clusterName.value, index: selectedIndex.value, field: selectedField.value, text: text.value,
+    host: clusterHost.value, index: selectedIndex.value, field: selectedField.value, text: text.value,
   })
   if (resp?.status === 200) tokens.value = resp.body || []
 }

@@ -25,23 +25,44 @@
       </UDropdownMenu>
 
       <div class="ml-auto flex items-center gap-2">
-        <span v-if="user" class="text-sm text-neutral-500">{{ user }}</span>
-        <UButton v-if="!user" to="/login" variant="ghost" color="neutral">Login</UButton>
-        <UButton v-else variant="ghost" color="neutral" @click="logout">Logout</UButton>
+        <span v-if="displayUser" class="text-sm text-neutral-500" data-testid="navbar-user">{{ displayUser }}</span>
+        <UButton
+          v-if="authEnabled && !user"
+          to="/login"
+          variant="ghost"
+          color="neutral"
+          data-testid="navbar-login"
+        >
+          Login
+        </UButton>
+        <UButton
+          v-if="authEnabled && user"
+          variant="ghost"
+          color="neutral"
+          data-testid="navbar-logout"
+          @click="logout"
+        >
+          Logout
+        </UButton>
       </div>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
+import BackendBadge from './BackendBadge.vue'
+import { defaultClusterConnection, type ClusterConnection } from '../composables/useAPI'
+import { useAuth } from '../composables/useAuth'
 
+const connection = useState<ClusterConnection>('clusterConnection', defaultClusterConnection)
 const clusterName = useState<string>('clusterName', () => '')
-const user = useState<string>('user', () => '')
 const backendType = useState<string>('backendType', () => '')
 const backendVersion = useState<string>('backendVersion', () => '')
+const { user, authEnabled, checkSession, logout } = useAuth()
 
 const connectLabel = computed(() => clusterName.value || 'Connect')
+const displayUser = computed(() => connection.value.username || user.value)
 
 const primaryLinks = [
   { label: 'Overview', to: '/overview' },
@@ -75,8 +96,7 @@ const mobileItems = computed(() => {
   return [connect, ...primaryLinks, ...moreLinks]
 })
 
-async function logout() {
-  await $fetch('/auth/logout', { method: 'POST' })
-  navigateTo('/login')
-}
+onMounted(() => {
+  checkSession()
+})
 </script>

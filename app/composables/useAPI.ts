@@ -1,20 +1,66 @@
+export interface ClusterConnection {
+  host: string
+  username: string
+  password: string
+  trustCertificate: boolean
+}
+
+export interface ApiCallOptions {
+  suppressErrorAlert?: boolean
+}
+
+export function defaultClusterConnection(): ClusterConnection {
+  return {
+    host: '',
+    username: '',
+    password: '',
+    trustCertificate: false,
+  }
+}
+
+export function extractEnvelopeError(body: any): string {
+  if (!body) return ''
+  if (typeof body === 'string') return body
+  if (typeof body.error === 'string') return body.error
+  if (body.error && typeof body.error === 'object') {
+    if (typeof body.error.reason === 'string') return body.error.reason
+    if (typeof body.error.type === 'string') return body.error.type
+  }
+  if (typeof body.message === 'string') return body.message
+  return ''
+}
+
+function pushUniqueAlert(alerts: any[], message: string, type: string) {
+  if (!alerts.some((a) => a.message === message && a.type === type)) {
+    alerts.push({ message, type })
+  }
+}
+
 export function useAPI() {
   const alerts = useState<any[]>('alerts', () => [])
-  const trustCertificate = useState<boolean>('trustCertificate', () => false)
+  const connection = useState<ClusterConnection>('clusterConnection', defaultClusterConnection)
 
-  async function apiCall(method: string, url: string, body?: any) {
+  async function apiCall(method: string, url: string, body?: any, options?: ApiCallOptions) {
     try {
       let payload: any = undefined
       if (body !== undefined) {
         payload = JSON.parse(JSON.stringify(body))
+        const conn = connection.value
         if (
-          trustCertificate.value &&
+          url !== '/connect' &&
           payload !== null &&
           typeof payload === 'object' &&
           !Array.isArray(payload) &&
-          payload.trustCertificate === undefined
+          conn?.host &&
+          payload.host === conn.host
         ) {
-          payload.trustCertificate = true
+          if (conn.username && conn.password) {
+            if (payload.username === undefined) payload.username = conn.username
+            if (payload.password === undefined) payload.password = conn.password
+          }
+          if (conn.trustCertificate && payload.trustCertificate === undefined) {
+            payload.trustCertificate = true
+          }
         }
       }
 
@@ -23,13 +69,37 @@ export function useAPI() {
         body: payload,
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
       }) as any
-      if (data.status === 303) {
+      if (data?.status === 303) {
         navigateTo('/login')
         return null
       }
+
+      if (!options?.suppressErrorAlert && data && typeof data.status === 'number') {
+        const detail = extractEnvelopeError(data.body)
+        if (data.status === 401) {
+          pushUniqueAlert(
+            alerts.value,
+            'Cluster authentication failed (401 Unauthorized). Reconnect from the Connect page with valid credentials.',
+            'danger',
+          )
+        } else if (data.status === 403) {
+          pushUniqueAlert(
+            alerts.value,
+            'Cluster request forbidden (403 Forbidden). Verify that the connected user has sufficient cluster permissions.',
+            'danger',
+          )
+        } else if (data.status >= 500) {
+          pushUniqueAlert(
+            alerts.value,
+            detail ? `Cluster request failed (${data.status}): ${detail}` : `Cluster request failed (${data.status}).`,
+            'danger',
+          )
+        }
+      }
+
       return data
     } catch (err: any) {
-      alerts.value.push({ message: err.message || 'Request failed', type: 'danger' })
+      pushUniqueAlert(alerts.value, err.message || 'Request failed', 'danger')
       return null
     }
   }

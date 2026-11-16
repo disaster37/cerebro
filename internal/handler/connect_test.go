@@ -155,6 +155,69 @@ func TestConnectMissingHostReturns400(t *testing.T) {
 	}
 }
 
+func TestProcessPerRequestCredentialsAndIsolation(t *testing.T) {
+	fake := &connectFake{}
+	hosts, err := config.NewHosts([]config.HostConfig{
+		{
+			Host: "http://es:9200",
+			Name: "test",
+			Auth: &config.ESAuth{Username: "yaml-user", Password: "yaml-pass"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewHosts: %v", err)
+	}
+	h := &Handlers{
+		Hosts:   hosts,
+		Connect: service.NewConnectService(fake),
+		Log:     logrus.New(),
+		Secret:  "test-secret",
+	}
+
+	// Custom host with per-request credentials and trustCertificate.
+	w := performConnect(t, h, `{"host":"https://custom:9200","username":"alice","password":"pw","trustCertificate":true}`)
+	if w.Result().StatusCode() != 200 {
+		t.Fatalf("HTTP status = %d, want 200", w.Result().StatusCode())
+	}
+	if fake.got.Host.Auth == nil || fake.got.Host.Auth.Username != "alice" || fake.got.Host.Auth.Password != "pw" {
+		t.Errorf("target auth = %+v, want alice/pw", fake.got.Host.Auth)
+	}
+	if !fake.got.TrustCertificate {
+		t.Error("target.TrustCertificate = false, want true")
+	}
+
+	// YAML-configured host without form credentials falls back to YAML auth.
+	w = performConnect(t, h, `{"host":"test"}`)
+	if w.Result().StatusCode() != 200 {
+		t.Fatalf("HTTP status = %d, want 200", w.Result().StatusCode())
+	}
+	if fake.got.Host.Auth == nil || fake.got.Host.Auth.Username != "yaml-user" || fake.got.Host.Auth.Password != "yaml-pass" {
+		t.Errorf("target auth = %+v, want yaml-user/yaml-pass", fake.got.Host.Auth)
+	}
+
+	before, ok := h.Hosts.GetHost("test")
+	if !ok {
+		t.Fatal("host 'test' missing")
+	}
+
+	// Per-request credentials override the YAML auth for this request only.
+	w = performConnect(t, h, `{"host":"test","username":"override","password":"overridepw"}`)
+	if w.Result().StatusCode() != 200 {
+		t.Fatalf("HTTP status = %d, want 200", w.Result().StatusCode())
+	}
+	if fake.got.Host.Auth == nil || fake.got.Host.Auth.Username != "override" || fake.got.Host.Auth.Password != "overridepw" {
+		t.Errorf("target auth = %+v, want override/overridepw", fake.got.Host.Auth)
+	}
+
+	after, ok := h.Hosts.GetHost("test")
+	if !ok {
+		t.Fatal("host 'test' missing after requests")
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Errorf("registry host = %+v, want unchanged %+v", after, before)
+	}
+}
+
 func TestTrustCertificateDoesNotMutateHostsRegistry(t *testing.T) {
 	fake := &connectFake{}
 	h := newConnectHandlers(t, fake, logrus.New())

@@ -134,4 +134,37 @@ describe('connect page', () => {
     expect(alert.exists()).toBe(true)
     expect(alert.text()).toBe('Connection failed')
   })
+
+  it('sends credentials on both connect and navbar', async () => {
+    const wrapper = await mountPage()
+
+    await wrapper.find('[data-testid="connect-custom-host"]').setValue('https://es:9200')
+    await wrapper.find('[data-testid="connect-username"]').setValue('admin')
+    await wrapper.find('[data-testid="connect-password"]').setValue('secret')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect((globalThis as any).$fetch).toHaveBeenCalledWith('/connect', expect.objectContaining({
+      body: { host: 'https://es:9200', username: 'admin', password: 'secret' },
+    }))
+    expect((globalThis as any).$fetch).toHaveBeenCalledWith('/navbar', expect.objectContaining({
+      body: { host: 'https://es:9200', username: 'admin', password: 'secret' },
+    }))
+  })
+
+  it('shows a credential rejection message on 401', async () => {
+    const wrapper = await mountPage({
+      '/connect': { status: 401, body: { error: 'unauthorized' } },
+    })
+
+    await wrapper.find('[data-testid="connect-custom-host"]').setValue('https://es:9200')
+    await wrapper.find('[data-testid="connect-username"]').setValue('admin')
+    await wrapper.find('[data-testid="connect-password"]').setValue('wrong')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const alert = wrapper.find('[data-testid="connect-error"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('cluster rejected credentials (401)')
+  })
 })

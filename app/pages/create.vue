@@ -19,7 +19,11 @@
 </template>
 
 <script setup lang="ts">
-const clusterName = useState<string>('clusterName')
+import { ref } from 'vue'
+import { useAPI } from '../composables/useAPI'
+import { useCluster } from '../composables/useCluster'
+
+const { clusterHost } = useCluster()
 const { apiCall } = useAPI()
 const name = ref('')
 const meta = ref('{}')
@@ -28,7 +32,7 @@ const success = ref(false)
 
 async function create() {
   const resp = await apiCall('POST', '/create_index/create', {
-    host: clusterName.value,
+    host: clusterHost.value,
     index: name.value,
     metadata: meta.value ? JSON.parse(meta.value) : {},
   })
