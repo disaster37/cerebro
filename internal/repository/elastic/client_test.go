@@ -22,11 +22,10 @@ type recordedRequest struct {
 	body        string
 }
 
-// newFakeOS returns an httptest server speaking OpenSearch-style GET / (no
-// X-Elastic-Product header) and recording every inbound request.
-func newFakeOS(t *testing.T, rec *recordedRequest) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// fakeOSHandler speaks OpenSearch-style GET / (no X-Elastic-Product header)
+// and records every inbound request.
+func fakeOSHandler(rec *recordedRequest) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		rec.method = r.Method
 		rec.path = r.URL.EscapedPath()
 		rec.rawQuery = r.URL.RawQuery
@@ -48,14 +47,13 @@ func newFakeOS(t *testing.T, rec *recordedRequest) *httptest.Server {
 			return
 		}
 		_, _ = w.Write([]byte(`{"acknowledged":true}`))
-	}))
+	}
 }
 
-// newFakeES returns an httptest server speaking ES-9-style GET / and setting
-// the X-Elastic-Product: Elasticsearch header (so the v9 product check passes).
-func newFakeES(t *testing.T, rec *recordedRequest) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// fakeESHandler speaks ES-9-style GET / and sets the X-Elastic-Product:
+// Elasticsearch header (so the v9 product check passes).
+func fakeESHandler(rec *recordedRequest) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		rec.method = r.Method
 		rec.path = r.URL.EscapedPath()
 		rec.rawQuery = r.URL.RawQuery
@@ -72,7 +70,31 @@ func newFakeES(t *testing.T, rec *recordedRequest) *httptest.Server {
 			return
 		}
 		_, _ = w.Write([]byte(`{"acknowledged":true}`))
-	}))
+	}
+}
+
+// newFakeOS returns a plain-HTTP OpenSearch fake.
+func newFakeOS(t *testing.T, rec *recordedRequest) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(fakeOSHandler(rec))
+}
+
+// newFakeES returns a plain-HTTP Elasticsearch fake.
+func newFakeES(t *testing.T, rec *recordedRequest) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(fakeESHandler(rec))
+}
+
+// newFakeOSTLS returns a self-signed TLS OpenSearch fake.
+func newFakeOSTLS(t *testing.T, rec *recordedRequest) *httptest.Server {
+	t.Helper()
+	return newTLSTestServer(t, fakeOSHandler(rec))
+}
+
+// newFakeESTLS returns a self-signed TLS Elasticsearch fake.
+func newFakeESTLS(t *testing.T, rec *recordedRequest) *httptest.Server {
+	t.Helper()
+	return newTLSTestServer(t, fakeESHandler(rec))
 }
 
 func targetFor(srv *httptest.Server, hostType string) domain.ElasticServer {
@@ -360,5 +382,87 @@ func TestOSEngineNon2xxPassthrough(t *testing.T) {
 	want := `{"error":"index not found"}`
 	if !bytes.Equal(resp.Body, []byte(want)) {
 		t.Errorf("body = %s, want %s (exact passthrough)", resp.Body, want)
+	}
+}
+
+func TestMultiClientSelfSignedTLSOpenSearch(t *testing.T) {
+	var rec recordedRequest
+	srv := newFakeOSTLS(t, &rec)
+	defer srv.Close()
+
+	m, err := NewMultiClient(false)
+	if err != nil {
+		t.Fatalf("NewMultiClient: %v", err)
+	}
+	ctx := context.Background()
+	target := targetFor(srv, "")
+
+	if _, err := m.ClusterHealth(ctx, target); err == nil {
+		t.Fatal("ClusterHealth with TrustCertificate=false succeeded, want TLS verification error")
+	}
+	if _, ok := m.flavors.get(strings.TrimRight(srv.URL, "/")); ok {
+		t.Error("flavor cached after failed detection, want retry on next request")
+	}
+
+	target.TrustCertificate = true
+	resp, err := m.ClusterHealth(ctx, target)
+	if err != nil {
+		t.Fatalf("ClusterHealth with TrustCertificate=true: %v", err)
+	}
+	if resp.Status != 200 {
+		t.Errorf("status = %d, want 200", resp.Status)
+	}
+
+	bi, err := m.BackendInfo(ctx, target)
+	if err != nil {
+		t.Fatalf("BackendInfo: %v", err)
+	}
+	if bi.Type != string(FlavorOpenSearch) {
+		t.Errorf("BackendInfo.Type = %q, want opensearch", bi.Type)
+	}
+	if bi.Version != "3.4.0" {
+		t.Errorf("BackendInfo.Version = %q, want 3.4.0", bi.Version)
+	}
+
+	target.TrustCertificate = false
+	if _, err := m.ClusterHealth(ctx, target); err == nil {
+		t.Fatal("ClusterHealth with TrustCertificate=false succeeded after flavor cached, want TLS verification error")
+	}
+}
+
+func TestMultiClientSelfSignedTLSElasticsearch(t *testing.T) {
+	var rec recordedRequest
+	srv := newFakeESTLS(t, &rec)
+	defer srv.Close()
+
+	m, err := NewMultiClient(false)
+	if err != nil {
+		t.Fatalf("NewMultiClient: %v", err)
+	}
+	ctx := context.Background()
+	target := targetFor(srv, "")
+
+	if _, err := m.ClusterHealth(ctx, target); err == nil {
+		t.Fatal("ClusterHealth with TrustCertificate=false succeeded, want TLS verification error")
+	}
+
+	target.TrustCertificate = true
+	resp, err := m.ClusterHealth(ctx, target)
+	if err != nil {
+		t.Fatalf("ClusterHealth with TrustCertificate=true: %v", err)
+	}
+	if resp.Status != 200 {
+		t.Errorf("status = %d, want 200", resp.Status)
+	}
+
+	bi, err := m.BackendInfo(ctx, target)
+	if err != nil {
+		t.Fatalf("BackendInfo: %v", err)
+	}
+	if bi.Type != string(FlavorElasticsearch) {
+		t.Errorf("BackendInfo.Type = %q, want elasticsearch", bi.Type)
+	}
+	if bi.Version != "9.4.3" {
+		t.Errorf("BackendInfo.Version = %q, want 9.4.3", bi.Version)
 	}
 }
