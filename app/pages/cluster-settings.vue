@@ -3,12 +3,15 @@
     <h4>Cluster Settings</h4>
     <div v-if="settings" class="mt-3">
       <div v-for="(val, key) in flatSettings" :key="key" class="mb-2">
-        <label class="form-label">{{ key }}</label>
-        <input v-model="flatSettings[key]" class="form-control form-control-sm" />
+        <UFormField :label="key">
+          <UInput v-model="flatSettings[key]" size="sm" class="w-full" />
+        </UFormField>
       </div>
-      <button class="btn btn-primary mt-2" @click="save">Save</button>
+      <UButton class="mt-2" @click="save">Save</UButton>
     </div>
-    <div v-else class="text-center p-5"><div class="spinner-border"></div></div>
+    <div v-else class="flex justify-center p-5" role="status" aria-label="Loading">
+      <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" />
+    </div>
   </div>
 </template>
 

@@ -1,41 +1,79 @@
 <template>
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="/">cerebro</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto">
-          <li class="nav-item"><NuxtLink class="nav-link" to="/connect">{{ clusterName || 'Connect' }}<BackendBadge :backend-type="backendType" :backend-version="backendVersion" /></NuxtLink></li>
-          <li class="nav-item" v-if="clusterName"><NuxtLink class="nav-link" to="/overview">Overview</NuxtLink></li>
-          <li class="nav-item" v-if="clusterName"><NuxtLink class="nav-link" to="/nodes">Nodes</NuxtLink></li>
-          <li class="nav-item" v-if="clusterName"><NuxtLink class="nav-link" to="/rest">REST</NuxtLink></li>
-          <li class="nav-item" v-if="clusterName"><NuxtLink class="nav-link" to="/aliases">Aliases</NuxtLink></li>
-          <li class="nav-item" v-if="clusterName"><NuxtLink class="nav-link" to="/create">Create Index</NuxtLink></li>
-          <li class="nav-item" v-if="clusterName"><NuxtLink class="nav-link" to="/analysis">Analysis</NuxtLink></li>
-          <li class="nav-item" v-if="clusterName"><NuxtLink class="nav-link" to="/templates">Templates</NuxtLink></li>
-          <li class="nav-item dropdown" v-if="clusterName">
-            <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">More</a>
-            <ul class="dropdown-menu">
-              <li><NuxtLink class="dropdown-item" to="/cluster-settings">Cluster Settings</NuxtLink></li>
-              <li><NuxtLink class="dropdown-item" to="/index-settings">Index Settings</NuxtLink></li>
-              <li><NuxtLink class="dropdown-item" to="/snapshot">Snapshot</NuxtLink></li>
-              <li><NuxtLink class="dropdown-item" to="/repository">Repositories</NuxtLink></li>
-              <li><NuxtLink class="dropdown-item" to="/cat">CAT</NuxtLink></li>
-            </ul>
-          </li>
-        </ul>
-        <div class="navbar-text me-2" v-if="user">{{ user }}</div>
-        <a v-if="!user" class="nav-link text-light" href="/login">Login</a>
-        <a v-if="user" class="nav-link text-light" href="javascript:void(0)" @click="logout">Logout</a>
+  <header class="sticky top-0 z-50 border-b border-neutral-200 bg-white">
+    <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
+      <NuxtLink to="/" class="text-sm font-semibold">cerebro</NuxtLink>
+
+      <UNavigationMenu
+        :items="navItems"
+        orientation="horizontal"
+        class="hidden flex-1 md:flex"
+      >
+        <template #connect-label="{ item }">
+          <span class="flex items-center gap-2">{{ item.label }}
+            <BackendBadge :backend-type="backendType" :backend-version="backendVersion" />
+          </span>
+        </template>
+      </UNavigationMenu>
+
+      <!-- Mobile menu (hamburger) -->
+      <UDropdownMenu
+        class="md:hidden"
+        :items="mobileItems"
+        :content="{ align: 'end' }"
+      >
+        <UButton icon="i-lucide-menu" color="neutral" variant="ghost" aria-label="Menu" />
+      </UDropdownMenu>
+
+      <div class="ml-auto flex items-center gap-2">
+        <span v-if="user" class="text-sm text-neutral-500">{{ user }}</span>
+        <UButton v-if="!user" to="/login" variant="ghost" color="neutral">Login</UButton>
+        <UButton v-else variant="ghost" color="neutral" @click="logout">Logout</UButton>
       </div>
     </div>
-  </nav>
+  </header>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
 const clusterName = useState<string>('clusterName', () => '')
 const user = useState<string>('user', () => '')
 const backendType = useState<string>('backendType', () => '')
 const backendVersion = useState<string>('backendVersion', () => '')
+
+const connectLabel = computed(() => clusterName.value || 'Connect')
+
+const primaryLinks = [
+  { label: 'Overview', to: '/overview' },
+  { label: 'Nodes', to: '/nodes' },
+  { label: 'REST', to: '/rest' },
+  { label: 'Aliases', to: '/aliases' },
+  { label: 'Create Index', to: '/create' },
+  { label: 'Analysis', to: '/analysis' },
+  { label: 'Templates', to: '/templates' },
+]
+
+const moreLinks = [
+  { label: 'Cluster Settings', to: '/cluster-settings' },
+  { label: 'Index Settings', to: '/index-settings' },
+  { label: 'Snapshot', to: '/snapshot' },
+  { label: 'Repositories', to: '/repository' },
+  { label: 'CAT', to: '/cat' },
+]
+
+// Horizontal nav (desktop). "More" renders its children as a dropdown.
+const navItems = computed(() => {
+  const connect = { label: connectLabel.value, to: '/connect', slot: 'connect' }
+  if (!clusterName.value) return [connect]
+  return [connect, ...primaryLinks, { label: 'More', children: moreLinks }]
+})
+
+// Mobile menu items (all links, flat).
+const mobileItems = computed(() => {
+  const connect = { label: connectLabel.value, to: '/connect' }
+  if (!clusterName.value) return [connect]
+  return [connect, ...primaryLinks, ...moreLinks]
+})
 
 async function logout() {
   await $fetch('/auth/logout', { method: 'POST' })

@@ -1,15 +1,11 @@
 <template>
   <div>
     <h4>Cat API</h4>
-    <div class="row">
-      <div class="col-md-4">
-        <input v-model="api" class="form-control" placeholder="indices" />
-      </div>
-      <div class="col-md-2">
-        <button class="btn btn-primary" @click="execute">Execute</button>
-      </div>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto]">
+      <UInput v-model="api" placeholder="indices" class="w-full" />
+      <UButton @click="execute">Execute</UButton>
     </div>
-    <pre v-if="result" class="mt-3 bg-light p-3 border rounded"><code>{{ JSON.stringify(result, null, 2) }}</code></pre>
+    <pre v-if="result" class="mt-3 overflow-x-auto rounded-lg border bg-neutral-100 p-4"><code>{{ JSON.stringify(result, null, 2) }}</code></pre>
   </div>
 </template>
 

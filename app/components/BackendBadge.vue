@@ -1,10 +1,12 @@
 <template>
-  <span
+  <UBadge
     v-if="backendType"
-    class="badge ms-2 align-middle"
-    :class="badgeClass"
+    :color="backendType === 'opensearch' ? 'secondary' : 'primary'"
+    variant="solid"
     data-testid="backend-badge"
-  >{{ label }}</span>
+  >
+    {{ label }}
+  </UBadge>
 </template>
 
 <script setup lang="ts">
@@ -16,8 +18,4 @@ const label = computed(() => {
   const name = props.backendType === 'opensearch' ? 'OpenSearch' : 'Elasticsearch'
   return props.backendVersion ? `${name} ${props.backendVersion}` : name
 })
-
-const badgeClass = computed(() =>
-  props.backendType === 'opensearch' ? 'badge-opensearch' : 'text-bg-primary',
-)
 </script>

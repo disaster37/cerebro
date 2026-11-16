@@ -1,16 +1,18 @@
 <template>
   <div>
     <h4>Login</h4>
-    <form @submit.prevent="doLogin" class="mt-3" style="max-width:400px">
+    <form @submit.prevent="doLogin" class="mt-3 max-w-sm">
       <div class="mb-3">
-        <label class="form-label">Username</label>
-        <input v-model="userField" class="form-control" required />
+        <UFormField label="Username">
+          <UInput v-model="userField" required class="w-full" />
+        </UFormField>
       </div>
       <div class="mb-3">
-        <label class="form-label">Password</label>
-        <input v-model="passField" type="password" class="form-control" required />
+        <UFormField label="Password">
+          <UInput v-model="passField" type="password" required class="w-full" />
+        </UFormField>
       </div>
-      <button class="btn btn-primary">Login</button>
+      <UButton type="submit">Login</UButton>
     </form>
   </div>
 </template>

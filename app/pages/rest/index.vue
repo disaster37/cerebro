@@ -1,43 +1,38 @@
 <template>
   <div>
     <h4>REST Console</h4>
-    <div class="row mt-3">
-      <div class="col-md-3">
-        <button class="btn btn-sm btn-outline-secondary" @click="loadIndices">Load Indices</button>
+    <div class="mt-3 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div>
+        <UButton size="sm" color="neutral" variant="outline" @click="loadIndices">Load Indices</UButton>
       </div>
-      <div class="col-md-3">
-        <label class="form-label">Method</label>
-        <select v-model="method" class="form-select">
-          <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
-        </select>
+      <div>
+        <UFormField label="Method">
+          <USelect v-model="method" :items="['GET', 'POST', 'PUT', 'DELETE']" class="w-full" />
+        </UFormField>
       </div>
-      <div class="col-md-3">
-        <label class="form-label">Path</label>
-        <input v-model="path" class="form-control" placeholder="_cat/indices" />
+      <div>
+        <UFormField label="Path">
+          <UInput v-model="path" placeholder="_cat/indices" class="w-full" />
+        </UFormField>
       </div>
-      <div class="col-md-3">
-        <label class="form-label">&nbsp;</label>
-        <button class="btn btn-primary w-100" @click="execute">Execute</button>
+      <div>
+        <UFormField label="&nbsp;">
+          <UButton block @click="execute">Execute</UButton>
+        </UFormField>
       </div>
     </div>
     <div class="mt-3">
-      <label class="form-label">Body</label>
-      <textarea v-model="body" class="form-control" rows="5" style="font-family:monospace"></textarea>
+      <UFormField label="Body">
+        <UTextarea v-model="body" :rows="5" class="w-full font-mono" />
+      </UFormField>
     </div>
-    <div class="mt-3" v-if="result !== null">
-      <label class="form-label">Response ({{ resultStatus }})</label>
-      <pre class="bg-light p-3 border rounded"><code>{{ JSON.stringify(result, null, 2) }}</code></pre>
+    <div v-if="result !== null" class="mt-3">
+      <label class="text-sm font-medium">Response ({{ resultStatus }})</label>
+      <pre class="overflow-x-auto rounded-lg border bg-neutral-100 p-4"><code>{{ JSON.stringify(result, null, 2) }}</code></pre>
     </div>
-    <div class="mt-3" v-if="history.length">
+    <div v-if="history.length" class="mt-3">
       <h6>History</h6>
-      <table class="table table-sm">
-        <thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Body</th></tr></thead>
-        <tbody>
-          <tr v-for="(h, i) in history" :key="i" style="cursor:pointer" @click="selectHistory(h)">
-            <td>{{ h.created_at }}</td><td>{{ h.method }}</td><td>{{ h.path }}</td><td class="text-truncate" style="max-width:200px">{{ h.body }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <UTable :data="history" :columns="historyColumns" @select="(__, row) => selectHistory(row.original)" />
     </div>
   </div>
 </template>
@@ -52,10 +47,17 @@ const result = ref<any>(null)
 const resultStatus = ref(0)
 const history = ref<any[]>([])
 
+const historyColumns = [
+  { accessorKey: 'created_at', header: 'Time' },
+  { accessorKey: 'method', header: 'Method' },
+  { accessorKey: 'path', header: 'Path' },
+  { accessorKey: 'body', header: 'Body', meta: { class: { td: 'max-w-[200px] truncate' } } },
+]
+
 onMounted(() => loadHistory())
 
 async function loadIndices() {
-  const resp = await apiCall('POST', '/rest', { host: clusterName.value })
+  await apiCall('POST', '/rest', { host: clusterName.value })
 }
 
 async function execute() {

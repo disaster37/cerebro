@@ -2,10 +2,18 @@
   <div>
     <h4>Create Index</h4>
     <form @submit.prevent="create" class="mt-3">
-      <div class="mb-3"><label>Index Name</label><input v-model="name" class="form-control" required /></div>
-      <div class="mb-3"><label>Settings / Mappings (JSON)</label><textarea v-model="meta" class="form-control" rows="10" style="font-family:monospace"></textarea></div>
-      <button class="btn btn-primary">Create</button>
-      <span v-if="msg" class="ms-2" :class="{ 'text-success': success, 'text-danger': !success }">{{ msg }}</span>
+      <div class="mb-3">
+        <UFormField label="Index Name">
+          <UInput v-model="name" required class="w-full" />
+        </UFormField>
+      </div>
+      <div class="mb-3">
+        <UFormField label="Settings / Mappings (JSON)">
+          <UTextarea v-model="meta" :rows="10" class="w-full font-mono" />
+        </UFormField>
+      </div>
+      <UButton type="submit">Create</UButton>
+      <span v-if="msg" class="ms-2" :class="success ? 'text-success-500' : 'text-error-500'">{{ msg }}</span>
     </form>
   </div>
 </template>

@@ -1,18 +1,12 @@
 <template>
   <div>
     <h4>Aliases</h4>
-    <div class="row">
-      <div class="col-md-6">
-        <table class="table table-sm">
-          <thead><tr><th>Alias</th><th>Index</th><th>Filter</th></tr></thead>
-          <tbody>
-            <tr v-for="(a, i) in aliases" :key="i">
-              <td>{{ a.alias }}</td><td>{{ a.index }}</td>
-              <td><small><code>{{ a.filter }}</code></small></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="max-w-3xl">
+      <UTable :data="aliases" :columns="aliasesColumns">
+        <template #filter-cell="{ row }">
+          <code class="text-xs">{{ row.original.filter }}</code>
+        </template>
+      </UTable>
     </div>
   </div>
 </template>
@@ -21,6 +15,12 @@
 const clusterName = useState<string>('clusterName')
 const { apiCall } = useAPI()
 const aliases = ref<any[]>([])
+
+const aliasesColumns = [
+  { accessorKey: 'alias', header: 'Alias' },
+  { accessorKey: 'index', header: 'Index' },
+  { id: 'filter', header: 'Filter' },
+]
 
 onMounted(async () => {
   const resp = await apiCall('POST', '/aliases/get_aliases', { host: clusterName.value })

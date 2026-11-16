@@ -1,10 +1,16 @@
 export default defineNuxtConfig({
   ssr: false,
+  modules: ['@nuxt/ui'],
+  css: ['~/assets/css/main.css'],
+  ui: {
+    // Preserve current light-only behavior and avoid build-time font fetching.
+    colorMode: false,
+    fonts: false,
+  },
   nitro: {
     output: {
       publicDir: 'output/public',
     },
   },
-  css: ['bootstrap/dist/css/bootstrap.min.css', '~/assets/css/main.css'],
   compatibilityDate: '2025-01-01',
 })

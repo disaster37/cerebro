@@ -10,7 +10,7 @@ import (
 // Image and path constants used across pipeline functions.
 const (
 	goImage   = "golang:1.26-bookworm" // disaster37/opensearch/v4 requires go 1.26
-	nodeImage = "node:20-bookworm"
+	nodeImage = "node:22-bookworm"     // was "node:20-bookworm"; Node 20 is EOL and nuxt 4.6 requires Node >=22.22.3
 	esImage   = "docker.elastic.co/elasticsearch/elasticsearch:9.4.3"
 	osImage   = "opensearchproject/opensearch:3.4.0" // same tag the v4 client's CI uses
 
