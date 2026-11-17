@@ -154,3 +154,51 @@ describe('policies page', () => {
     expect(wrapper.find('[data-testid="policies-error"]').exists()).toBe(true)
   })
 })
+
+describe('policies actions', () => {
+  beforeEach(() => {
+    resetTestStubs()
+    vi.clearAllMocks()
+    ;(globalThis as any).$fetch.mockReset()
+  })
+
+  it('renders labeled Details and View JSON buttons instead of bare icon-only braces', async () => {
+    setConnection()
+    mockLoad(ilmPayload, slmPayload)
+
+    const wrapper = mount(PoliciesPage)
+    await flushPromises()
+
+    expect(wrapper.findAll('button').some((b) => b.text() === 'Details')).toBe(true)
+    expect(wrapper.findAll('button').some((b) => b.text() === 'View JSON')).toBe(true)
+    expect(wrapper.text()).not.toContain('{}')
+  })
+
+  it('opens the policy JSON inspector from the View JSON button', async () => {
+    setConnection()
+    mockLoad(ilmPayload, slmPayload)
+
+    const wrapper = mount(PoliciesPage)
+    await flushPromises()
+
+    const view = wrapper.findAll('button').find((b) => b.text() === 'View JSON')
+    await view!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Policy: p1')
+  })
+
+  it('renders snapshot policy action icons and View JSON', async () => {
+    setConnection()
+    mockLoad(ilmPayload, slmPayload)
+
+    const wrapper = mount(PoliciesPage)
+    await flushPromises()
+
+    await wrapper.findAll('button').find((b) => b.text().includes('Snapshot Policies'))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('button').some((b) => b.text() === 'Run Now / Retry')).toBe(true)
+    expect(wrapper.findAll('button').some((b) => b.text() === 'View JSON')).toBe(true)
+  })
+})

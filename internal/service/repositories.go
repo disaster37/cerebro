@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"cerebro/internal/domain"
 )
@@ -90,36 +91,94 @@ func (s *RepositoriesService) Verify(ctx context.Context, req domain.CerebroRequ
 		status.Status = "IN_PROGRESS"
 	}
 
-	size, err := domain.ParseRepositorySizeStats(snapshotsResp.Body)
-	if err != nil {
-		return domain.ErrorResponse(500, err.Error()), nil
-	}
-	if size.HasStats {
+	switch {
+	case counts.total == 0:
+		zero := int64(0)
 		status.SizeComputed = true
-		status.SizeInBytes = &size.SizeInBytes
-		status.LogicalSizeInBytes = &size.LogicalSizeInBytes
-	} else if counts.total > 0 && (counts.total <= 50 || forceFullSize) {
-		statusResp, serr := s.snapshots.GetSnapshotStatus(name, "_all", true, ctx, req.Target)
+		status.SizeInBytes = &zero
+		status.LogicalSizeInBytes = &zero
+	case counts.total <= 50 || forceFullSize:
+		// GET /_snapshot/{repo}/{snapshot}/_status is the authoritative
+		// file-size endpoint on both Elasticsearch 8/9 and OpenSearch 2/3.
+		// Fall back to the inline SnapshotInfo stats only when _status is
+		// unavailable.
+		size, serr := s.snapshotSizeFromStatus(name, snapshotNames(snapshotsResp.Body), ctx, req.Target)
 		if serr != nil {
 			return domain.ErrorResponse(502, serr.Error()), nil
 		}
-		if !statusResp.IsSuccess() {
-			return *statusResp, nil
-		}
-		size, serr = domain.ParseRepositorySizeStats(statusResp.Body)
-		if serr != nil {
-			return domain.ErrorResponse(500, serr.Error()), nil
+		if size == nil {
+			inline, perr := domain.ParseRepositorySizeStats(snapshotsResp.Body)
+			if perr != nil {
+				return domain.ErrorResponse(500, perr.Error()), nil
+			}
+			size = &inline
 		}
 		status.SizeComputed = true
 		status.SizeInBytes = &size.SizeInBytes
 		status.LogicalSizeInBytes = &size.LogicalSizeInBytes
-	} else if counts.total > 50 && !forceFullSize {
-		status.SizeComputed = false
-		status.SizeSkippedReason = "More than 50 snapshots; click Calculate Size to scan all shards"
+	default:
+		size, perr := domain.ParseRepositorySizeStats(snapshotsResp.Body)
+		if perr != nil {
+			return domain.ErrorResponse(500, perr.Error()), nil
+		}
+		if size.HasStats && (size.SizeInBytes > 0 || size.LogicalSizeInBytes > 0) {
+			status.SizeComputed = true
+			status.SizeInBytes = &size.SizeInBytes
+			status.LogicalSizeInBytes = &size.LogicalSizeInBytes
+		} else {
+			status.SizeComputed = false
+			status.SizeSkippedReason = "More than 50 snapshots; click Calculate Size to scan all shards"
+		}
 	}
 
 	body, _ := json.Marshal(status)
 	return domain.NewResponse(200, body), nil
+}
+
+// snapshotSizeFromStatus queries the authoritative _status endpoint. It first
+// tries the documented `_all` wildcard, then the explicit snapshot names:
+// Elasticsearch 9 and OpenSearch 3 return an empty snapshot list for
+// `_all/_status` even though the named form returns full stats. It returns
+// (nil, nil) when no usable stats are available so the caller can fall back to
+// the inline SnapshotInfo stats.
+func (s *RepositoriesService) snapshotSizeFromStatus(name string, snapshots []string, ctx context.Context, target domain.ElasticServer) (*domain.RepositorySizeStats, error) {
+	candidates := []string{"_all"}
+	if len(snapshots) > 0 {
+		candidates = append(candidates, strings.Join(snapshots, ","))
+	}
+	for _, snapshot := range candidates {
+		statusResp, err := s.snapshots.GetSnapshotStatus(name, snapshot, true, ctx, target)
+		if err != nil {
+			return nil, err
+		}
+		if statusResp == nil || !statusResp.IsSuccess() {
+			continue
+		}
+		size, err := domain.ParseRepositorySizeStats(statusResp.Body)
+		if err != nil {
+			return nil, err
+		}
+		if size.HasStats && (size.SizeInBytes > 0 || size.LogicalSizeInBytes > 0) {
+			return &size, nil
+		}
+	}
+	return nil, nil
+}
+
+func snapshotNames(in json.RawMessage) []string {
+	var raw struct {
+		Snapshots []struct {
+			Snapshot string `json:"snapshot"`
+		} `json:"snapshots"`
+	}
+	_ = json.Unmarshal(in, &raw)
+	names := make([]string, 0, len(raw.Snapshots))
+	for _, snap := range raw.Snapshots {
+		if snap.Snapshot != "" {
+			names = append(names, snap.Snapshot)
+		}
+	}
+	return names
 }
 
 type snapshotCountSummary struct {

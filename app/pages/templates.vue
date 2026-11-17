@@ -23,6 +23,7 @@
       :data="filteredTemplates"
       :columns="columns"
       :default-sort="[{ id: 'name', desc: false }]"
+      :row-key="(t) => `${t.name}:${t.type}`"
       filter-placeholder="Filter templates..."
       empty-text="No templates found."
     >
@@ -31,14 +32,17 @@
         <UInput v-model="patternFilter" size="sm" icon="i-lucide-search" placeholder="Pattern..." class="w-40" />
       </template>
       <template #type-cell="{ row }">
-        <UBadge :color="row.original.type === 'composable' ? 'info' : 'neutral'" variant="soft">{{ row.original.type }}</UBadge>
+        <div class="flex flex-wrap items-center gap-1">
+          <UBadge :color="row.original.type === 'composable' ? 'info' : 'neutral'" variant="soft">{{ row.original.type }}</UBadge>
+          <UBadge v-if="row.original.data_stream" color="primary" variant="soft">data stream</UBadge>
+        </div>
       </template>
       <template #patterns-cell="{ row }">
         <span class="text-xs">{{ (row.original.patterns || []).join(', ') }}</span>
       </template>
       <template #actions-cell="{ row }">
         <div class="flex items-center gap-1">
-          <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-braces" @click="inspect(row.original)" />
+          <UButton size="xs" color="neutral" variant="outline" icon="i-lucide-file-code" @click="inspect(row.original)">View JSON</UButton>
           <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="del(row.original)" />
         </div>
       </template>
@@ -78,21 +82,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import CerebroTable from '../components/CerebroTable.vue'
 import JsonInspectorModal from '../components/JsonInspectorModal.vue'
 import { extractEnvelopeError, useAPI } from '../composables/useAPI'
 import { useCluster } from '../composables/useCluster'
 import type { CerebroColumnDef } from '../composables/useSortableColumns'
+import type { TemplateEntry } from '../types/cerebro'
 
-interface TemplateEntry {
-  name: string
-  type: string
-  patterns: string[]
-  order?: number
-  version?: number
-  template: any
-}
+const COMPOSABLE_DEFAULT = '{\n  "template": {\n    "settings": {}\n  }\n}'
+const LEGACY_DEFAULT = '{\n  "settings": {}\n}'
 
 const { clusterHost } = useCluster()
 const { apiCall } = useAPI()
@@ -105,7 +104,7 @@ const patternFilter = ref('')
 const createOpen = ref(false)
 const saving = ref(false)
 const formError = ref('')
-const form = ref({ name: '', type: 'composable', patterns: '', body: '{\n  "template": {\n    "settings": {}\n  }\n}' })
+const form = ref({ name: '', type: 'composable', patterns: '', body: COMPOSABLE_DEFAULT })
 const inspectorOpen = ref(false)
 const inspectorTitle = ref('')
 const inspectorData = ref<any>(null)
@@ -138,7 +137,7 @@ async function load() {
     return
   }
   loading.value = true
-  const resp = await apiCall('POST', '/templates', { host: clusterHost.value })
+  const resp = await apiCall('POST', '/templates', { host: clusterHost.value }, { suppressErrorAlert: true })
   if (resp?.status === 200) {
     templates.value = resp.body || []
     error.value = ''
@@ -152,7 +151,7 @@ async function load() {
 }
 
 function openCreate() {
-  form.value = { name: '', type: 'composable', patterns: '', body: '{\n  "template": {\n    "settings": {}\n  }\n}' }
+  form.value = { name: '', type: 'composable', patterns: '', body: COMPOSABLE_DEFAULT }
   formError.value = ''
   createOpen.value = true
 }
@@ -199,6 +198,13 @@ function inspect(template: TemplateEntry) {
   inspectorData.value = template.template
   inspectorOpen.value = true
 }
+
+watch(() => form.value.type, (type, oldType) => {
+  const oldDefault = oldType === 'legacy' ? LEGACY_DEFAULT : COMPOSABLE_DEFAULT
+  if (form.value.body === oldDefault) {
+    form.value.body = type === 'legacy' ? LEGACY_DEFAULT : COMPOSABLE_DEFAULT
+  }
+})
 
 onMounted(load)
 </script>

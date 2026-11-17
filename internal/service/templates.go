@@ -34,20 +34,33 @@ func (s *TemplatesService) Templates(ctx context.Context, req domain.CerebroRequ
 
 	all := make([]domain.TemplateEntry, 0)
 	if composable.IsSuccess() {
-		entries, perr := parseTemplateEntries(composable.Body)
+		norm, nerr := domain.ComposableTemplates(composable.Body)
+		if nerr != nil {
+			return domain.ErrorResponse(500, nerr.Error()), nil
+		}
+		entries, perr := parseTemplateEntries(norm)
 		if perr != nil {
 			return domain.ErrorResponse(500, perr.Error()), nil
 		}
 		all = append(all, entries...)
 	}
 	if legacy.IsSuccess() {
-		entries, perr := parseTemplateEntries(legacy.Body)
+		norm, nerr := domain.Templates(legacy.Body)
+		if nerr != nil {
+			return domain.ErrorResponse(500, nerr.Error()), nil
+		}
+		entries, perr := parseTemplateEntries(norm)
 		if perr != nil {
 			return domain.ErrorResponse(500, perr.Error()), nil
 		}
 		all = append(all, entries...)
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].Name != all[j].Name {
+			return all[i].Name < all[j].Name
+		}
+		return all[i].Type < all[j].Type
+	})
 	body, _ := json.Marshal(all)
 	return domain.NewResponse(200, body), nil
 }

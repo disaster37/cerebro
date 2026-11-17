@@ -103,15 +103,27 @@
             <span class="text-xs">{{ row.original.reason || '-' }}</span>
           </template>
           <template #actions-cell="{ row }">
-            <UButton
-              v-if="row.original.failed"
-              size="xs"
-              color="error"
-              variant="outline"
-              @click="openRetry(row.original)"
-            >
-              {{ isOpenSearch ? 'Retry Policy' : 'Retry Step' }}
-            </UButton>
+            <div class="flex flex-wrap items-center gap-1">
+              <UButton
+                v-if="row.original.failed"
+                size="xs"
+                color="error"
+                variant="outline"
+                icon="i-lucide-rotate-ccw"
+                @click="openRetry(row.original)"
+              >
+                {{ isOpenSearch ? 'Retry Policy' : 'Retry Step' }}
+              </UButton>
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-eye"
+                @click="inspect(`Managed Index: ${row.original.index}`, row.original)"
+              >
+                Details
+              </UButton>
+            </div>
           </template>
         </CerebroTable>
 
@@ -129,7 +141,15 @@
             </div>
           </template>
           <template #actions-cell="{ row }">
-            <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-braces" @click="inspect('Policy JSON', row.original.raw_policy)" />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="outline"
+              icon="i-lucide-file-code"
+              @click="inspect(`Policy: ${row.original.id}`, row.original.raw_policy)"
+            >
+              View JSON
+            </UButton>
           </template>
         </CerebroTable>
       </div>
@@ -180,12 +200,20 @@
           <template #actions-cell="{ row }">
             <div class="flex flex-wrap items-center gap-1">
               <template v-if="isOpenSearch">
-                <UButton size="xs" color="success" variant="outline" @click="snapshotAction(row.original.id, 'start')">Start</UButton>
-                <UButton size="xs" color="warning" variant="outline" @click="snapshotAction(row.original.id, 'stop')">Stop</UButton>
-                <UButton size="xs" color="neutral" variant="outline" @click="snapshotAction(row.original.id, 'restart')">Restart</UButton>
+                <UButton size="xs" color="success" variant="outline" icon="i-lucide-play" @click="snapshotAction(row.original.id, 'start')">Start</UButton>
+                <UButton size="xs" color="warning" variant="outline" icon="i-lucide-square" @click="snapshotAction(row.original.id, 'stop')">Stop</UButton>
+                <UButton size="xs" color="neutral" variant="outline" icon="i-lucide-rotate-ccw" @click="snapshotAction(row.original.id, 'restart')">Restart</UButton>
               </template>
-              <UButton v-else size="xs" color="primary" variant="outline" @click="snapshotAction(row.original.id, 'execute')">Run Now / Retry</UButton>
-              <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-braces" @click="inspect('Snapshot policy JSON', row.original.raw_policy)" />
+              <UButton v-else size="xs" color="primary" variant="outline" icon="i-lucide-play" @click="snapshotAction(row.original.id, 'execute')">Run Now / Retry</UButton>
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-file-code"
+                @click="inspect(`Snapshot Policy: ${row.original.id}`, row.original.raw_policy)"
+              >
+                View JSON
+              </UButton>
             </div>
           </template>
         </CerebroTable>
@@ -401,8 +429,8 @@ async function load() {
   }
   loading.value = true
   const [indexResp, snapshotResp] = await Promise.all([
-    apiCall('POST', '/policies/index_lifecycle', { host: clusterHost.value }),
-    apiCall('POST', '/policies/snapshot_lifecycle', { host: clusterHost.value }),
+    apiCall('POST', '/policies/index_lifecycle', { host: clusterHost.value }, { suppressErrorAlert: true }),
+    apiCall('POST', '/policies/snapshot_lifecycle', { host: clusterHost.value }, { suppressErrorAlert: true }),
   ])
 
   if (indexResp?.status === 200) {

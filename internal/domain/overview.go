@@ -5,30 +5,47 @@ import (
 	"sort"
 )
 
+// UnassignedShardInfo explains why a shard could not be allocated.
+type UnassignedShardInfo struct {
+	Reason           string `json:"reason"`
+	At               string `json:"at,omitempty"`
+	Details          string `json:"details,omitempty"`
+	AllocationStatus string `json:"last_allocation_status,omitempty"`
+}
+
 // OverviewShard is one shard routing entry in the overview shard-allocation grid.
 type OverviewShard struct {
-	Index          string  `json:"index"`
-	Shard          int     `json:"shard"`
-	Primary        bool    `json:"primary"`
-	State          string  `json:"state"`
-	Node           *string `json:"node"`
-	RelocatingNode *string `json:"relocating_node,omitempty"`
+	Index          string               `json:"index"`
+	Shard          int                  `json:"shard"`
+	Primary        bool                 `json:"primary"`
+	State          string               `json:"state"`
+	Node           *string              `json:"node"`
+	RelocatingNode *string              `json:"relocating_node,omitempty"`
+	UnassignedInfo *UnassignedShardInfo `json:"unassigned_info,omitempty"`
 }
 
 // OverviewIndex is one index row in the overview.
 type OverviewIndex struct {
-	Name             string                     `json:"name"`
-	Closed           bool                       `json:"closed"`
-	Special          bool                       `json:"special"`
-	Unhealthy        bool                       `json:"unhealthy"`
-	DocCount         int64                      `json:"doc_count"`
-	DeletedDocs      int64                      `json:"deleted_docs"`
-	SizeInBytes      int64                      `json:"size_in_bytes"`
-	TotalSizeInBytes int64                      `json:"total_size_in_bytes"`
-	Aliases          []string                   `json:"aliases"`
-	NumShards        int                        `json:"num_shards"`
-	NumReplicas      int                        `json:"num_replicas"`
-	Shards           map[string][]OverviewShard `json:"shards"`
+	Name                   string                     `json:"name"`
+	Closed                 bool                       `json:"closed"`
+	Special                bool                       `json:"special"`
+	BackingIndex           bool                       `json:"backing_index"`
+	DataStream             string                     `json:"data_stream,omitempty"`
+	IsWriteIndex           bool                       `json:"is_write_index,omitempty"`
+	Status                 string                     `json:"status"` // "green" | "yellow" | "red" | "closed"
+	Unhealthy              bool                       `json:"unhealthy"`
+	Unreplicated           bool                       `json:"unreplicated"`
+	UnassignedShardCount   int                        `json:"unassigned_shard_count"`
+	InitializingShardCount int                        `json:"initializing_shard_count"`
+	RelocatingShardCount   int                        `json:"relocating_shard_count"`
+	DocCount               int64                      `json:"doc_count"`
+	DeletedDocs            int64                      `json:"deleted_docs"`
+	SizeInBytes            int64                      `json:"size_in_bytes"`
+	TotalSizeInBytes       int64                      `json:"total_size_in_bytes"`
+	Aliases                []string                   `json:"aliases"`
+	NumShards              int                        `json:"num_shards"`
+	NumReplicas            int                        `json:"num_replicas"`
+	Shards                 map[string][]OverviewShard `json:"shards"`
 }
 
 type aliasMap map[string]struct {
@@ -52,7 +69,7 @@ type indexStatPayload struct {
 	} `json:"total"`
 }
 
-func ClusterOverview(state, nodesStats, idxStats, clusterSettings, aliases, health, nodesInfo json.RawMessage) (json.RawMessage, error) {
+func ClusterOverview(state, nodesStats, idxStats, clusterSettings, aliases, health, nodesInfo, dataStreamsRaw json.RawMessage) (json.RawMessage, error) {
 	var cs struct {
 		MasterNode         string          `json:"master_node"`
 		ClusterManagerNode string          `json:"cluster_manager_node"`
@@ -109,8 +126,14 @@ func ClusterOverview(state, nodesStats, idxStats, clusterSettings, aliases, heal
 	}
 	shardAllocation := enabled == "all"
 
-	indices := overviewIndices(cs.RoutingTable, cs.Blocks, idxS.Indices, aliases)
+	dataStreams, backingMeta, dsErr := ParseDataStreams(dataStreamsRaw)
+	if dsErr != nil {
+		dataStreams = []DataStreamSummary{}
+		backingMeta = nil
+	}
+	indices := overviewIndices(cs.RoutingTable, cs.Blocks, idxS.Indices, aliases, backingMeta)
 	nodes := overviewNodes(masterID, nodesInfo, nodesStats)
+	aggregateDataStreamStats(dataStreams, indices)
 
 	out := map[string]any{
 		"cluster_name":          extractJSON(health, "cluster_name"),
@@ -127,10 +150,30 @@ func ClusterOverview(state, nodesStats, idxStats, clusterSettings, aliases, heal
 		"closed_indices":        countClosed(indices),
 		"special_indices":       countSpecial(indices),
 		"indices":               indices,
+		"data_streams":          dataStreams,
 		"nodes":                 nodes,
 		"shard_allocation":      shardAllocation,
 	}
 	return json.Marshal(out)
+}
+
+func aggregateDataStreamStats(dataStreams []DataStreamSummary, indices []OverviewIndex) {
+	byName := make(map[string]*DataStreamSummary, len(dataStreams))
+	for i := range dataStreams {
+		byName[dataStreams[i].Name] = &dataStreams[i]
+	}
+	for _, idx := range indices {
+		if idx.DataStream == "" {
+			continue
+		}
+		ds, ok := byName[idx.DataStream]
+		if !ok {
+			continue
+		}
+		ds.DocCount += idx.DocCount
+		ds.SizeInBytes += idx.SizeInBytes
+		ds.TotalSizeInBytes += idx.TotalSizeInBytes
+	}
 }
 
 func firstNonEmpty(values ...string) string {
@@ -168,7 +211,7 @@ func countSpecial(indices []OverviewIndex) int {
 	return n
 }
 
-func overviewIndices(routingTable, blocks, idxStats, aliases json.RawMessage) []OverviewIndex {
+func overviewIndices(routingTable, blocks, idxStats, aliases json.RawMessage, backingMeta map[string]DataStreamBackingMeta) []OverviewIndex {
 	var rt struct {
 		Indices map[string]json.RawMessage `json:"indices"`
 	}
@@ -187,7 +230,7 @@ func overviewIndices(routingTable, blocks, idxStats, aliases json.RawMessage) []
 
 	result := make([]OverviewIndex, 0, len(rt.Indices))
 	for name, shards := range rt.Indices {
-		result = append(result, overviewIndexEntry(name, shards, stats[name], blk.Indices, aliasMap))
+		result = append(result, overviewIndexEntry(name, shards, stats[name], blk.Indices, aliasMap, backingMeta))
 	}
 	for name, block := range blk.Indices {
 		if _, ok := rt.Indices[name]; ok {
@@ -198,20 +241,23 @@ func overviewIndices(routingTable, blocks, idxStats, aliases json.RawMessage) []
 		}
 		_ = json.Unmarshal(block, &b)
 		if b.Four != nil {
-			result = append(result, OverviewIndex{
+			entry := OverviewIndex{
 				Name:    name,
 				Closed:  true,
 				Special: isSpecialIndex(name),
+				Status:  "closed",
 				Aliases: aliasNames(aliasMap, name),
 				Shards:  map[string][]OverviewShard{},
-			})
+			}
+			applyDataStreamMeta(&entry, backingMeta)
+			result = append(result, entry)
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result
 }
 
-func overviewIndexEntry(name string, shardsRaw json.RawMessage, stats indexStatPayload, blocks map[string]json.RawMessage, aliases aliasMap) OverviewIndex {
+func overviewIndexEntry(name string, shardsRaw json.RawMessage, stats indexStatPayload, blocks map[string]json.RawMessage, aliases aliasMap, backingMeta map[string]DataStreamBackingMeta) OverviewIndex {
 	closed := false
 	if block, ok := blocks[name]; ok {
 		var b struct {
@@ -228,14 +274,30 @@ func overviewIndexEntry(name string, shardsRaw json.RawMessage, stats indexStatP
 
 	grouped := map[string][]OverviewShard{}
 	unhealthy := false
+	unassigned := 0
+	initializing := 0
+	relocating := 0
+	primaryDown := false
 	maxShard := -1
 	for _, shardList := range routing.Shards {
 		for _, shard := range shardList {
 			if shard.Shard > maxShard {
 				maxShard = shard.Shard
 			}
+			switch shard.State {
+			case "STARTED":
+			case "UNASSIGNED":
+				unassigned++
+			case "INITIALIZING":
+				initializing++
+			case "RELOCATING":
+				relocating++
+			}
 			if shard.State != "STARTED" {
 				unhealthy = true
+				if shard.Primary {
+					primaryDown = true
+				}
 			}
 			nodeKey := "unassigned"
 			if shard.Node != nil && *shard.Node != "" {
@@ -243,16 +305,24 @@ func overviewIndexEntry(name string, shardsRaw json.RawMessage, stats indexStatP
 			}
 			grouped[nodeKey] = append(grouped[nodeKey], shard)
 			if shard.RelocatingNode != nil && *shard.RelocatingNode != "" {
-				relocating := OverviewShard{
+				relocatingShard := OverviewShard{
 					Index:   name,
 					Shard:   shard.Shard,
 					Primary: false,
 					State:   "INITIALIZING",
 					Node:    shard.RelocatingNode,
 				}
-				grouped[*shard.RelocatingNode] = append(grouped[*shard.RelocatingNode], relocating)
+				grouped[*shard.RelocatingNode] = append(grouped[*shard.RelocatingNode], relocatingShard)
 			}
 		}
+	}
+	for nodeKey := range grouped {
+		sort.SliceStable(grouped[nodeKey], func(i, j int) bool {
+			if grouped[nodeKey][i].Shard != grouped[nodeKey][j].Shard {
+				return grouped[nodeKey][i].Shard < grouped[nodeKey][j].Shard
+			}
+			return grouped[nodeKey][i].Primary && !grouped[nodeKey][j].Primary
+		})
 	}
 
 	numShards := 0
@@ -264,19 +334,57 @@ func overviewIndexEntry(name string, shardsRaw json.RawMessage, stats indexStatP
 		numReplicas = len(primaryShards) - 1
 	}
 
-	return OverviewIndex{
-		Name:             name,
-		Closed:           closed,
-		Special:          isSpecialIndex(name),
-		Unhealthy:        !closed && unhealthy,
-		DocCount:         stats.Primaries.Docs.Count,
-		DeletedDocs:      stats.Primaries.Docs.Deleted,
-		SizeInBytes:      stats.Primaries.Store.SizeInBytes,
-		TotalSizeInBytes: stats.Total.Store.SizeInBytes,
-		Aliases:          aliasNames(aliases, name),
-		NumShards:        numShards,
-		NumReplicas:      numReplicas,
-		Shards:           grouped,
+	status := "green"
+	switch {
+	case closed:
+		status = "closed"
+	case primaryDown || numShards == 0:
+		status = "red"
+	case unhealthy:
+		status = "yellow"
+	}
+
+	entry := OverviewIndex{
+		Name:                   name,
+		Closed:                 closed,
+		Special:                isSpecialIndex(name),
+		Status:                 status,
+		Unhealthy:              !closed && unhealthy,
+		Unreplicated:           !closed && numShards > 0 && numReplicas == 0,
+		UnassignedShardCount:   unassigned,
+		InitializingShardCount: initializing,
+		RelocatingShardCount:   relocating,
+		DocCount:               stats.Primaries.Docs.Count,
+		DeletedDocs:            stats.Primaries.Docs.Deleted,
+		SizeInBytes:            stats.Primaries.Store.SizeInBytes,
+		TotalSizeInBytes:       stats.Total.Store.SizeInBytes,
+		Aliases:                aliasNames(aliases, name),
+		NumShards:              numShards,
+		NumReplicas:            numReplicas,
+		Shards:                 grouped,
+	}
+	applyDataStreamMeta(&entry, backingMeta)
+	return entry
+}
+
+// applyDataStreamMeta marks an index as a data stream backing index and
+// decouples user data stream backing indices from the `.special` system-index
+// filter. When GET /_data_stream is unavailable it falls back to the `.ds-*`
+// naming heuristic.
+func applyDataStreamMeta(entry *OverviewIndex, backingMeta map[string]DataStreamBackingMeta) {
+	if meta, ok := backingMeta[entry.Name]; ok {
+		entry.BackingIndex = true
+		entry.DataStream = meta.DataStream
+		entry.IsWriteIndex = meta.IsWriteIndex
+		if !meta.HiddenOrSystem {
+			entry.Special = false
+		}
+		return
+	}
+	if name, ok := DataStreamNameFromBackingIndex(entry.Name); ok {
+		entry.BackingIndex = true
+		entry.DataStream = name
+		entry.Special = false
 	}
 }
 

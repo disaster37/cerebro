@@ -230,6 +230,13 @@ describe('useCluster', () => {
 
     ;(globalThis as any).$fetch.mockResolvedValueOnce({ status: 404, body: { error: 'not found' } })
     await apiCall('POST', '/overview', { host: 'x' })
-    expect(alerts()).toHaveLength(3)
+    expect(alerts()).toHaveLength(4)
+    expect(alerts()[3].message).toContain('Cluster request rejected (404)')
+    expect(alerts()[3].message).toContain('not found')
+
+    ;(globalThis as any).$fetch.mockResolvedValueOnce({ status: 409, body: { error: 'conflict' } })
+    await apiCall('POST', '/overview', { host: 'x' })
+    expect(alerts()).toHaveLength(5)
+    expect(alerts()[4].message).toContain('Cluster request rejected (409)')
   })
 })

@@ -18,8 +18,18 @@ type ClusterAPI interface {
 	EnableShardAllocation(ctx context.Context, target ElasticServer) (*Response, error)
 	DisableShardAllocation(kind string, ctx context.Context, target ElasticServer) (*Response, error)
 	RelocateShard(shard int, index, from, to string, ctx context.Context, target ElasticServer) (*Response, error)
+	AllocationExplain(index string, shard int, primary bool, ctx context.Context, target ElasticServer) (*Response, error)
 	GetClusterMapping(ctx context.Context, target ElasticServer) (*Response, error)
 	BackendInfo(ctx context.Context, target ElasticServer) (BackendInfo, error)
+}
+
+// DataStreamAPI is data stream operations (identical paths on ES 8/9 and
+// OpenSearch 2/3).
+type DataStreamAPI interface {
+	GetDataStreams(ctx context.Context, target ElasticServer) (*Response, error)
+	CreateDataStream(name string, ctx context.Context, target ElasticServer) (*Response, error)
+	DeleteDataStream(name string, ctx context.Context, target ElasticServer) (*Response, error)
+	RolloverDataStream(name string, ctx context.Context, target ElasticServer) (*Response, error)
 }
 
 // IndexAPI is index-level operations.
@@ -127,4 +137,5 @@ type ElasticClient interface {
 	CatAPI
 	RawAPI
 	PolicyAPI
+	DataStreamAPI
 }

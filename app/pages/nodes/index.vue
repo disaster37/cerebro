@@ -126,11 +126,14 @@ const inspectorTitle = ref('')
 const inspectorData = ref<any>(null)
 
 const filteredNodes = computed(() => nodes.value.filter((n) => {
-  if (n.master && !roleFilter.value.M) return false
-  if (n.data && !roleFilter.value.D) return false
-  if (n.ingest && !roleFilter.value.I) return false
-  if (n.coordinating && !roleFilter.value.C) return false
-  return true
+  const hasRole = n.master || n.data || n.ingest || n.coordinating
+  if (!hasRole) {
+    return roleFilter.value.M && roleFilter.value.D && roleFilter.value.I && roleFilter.value.C
+  }
+  return (n.master && roleFilter.value.M)
+    || (n.data && roleFilter.value.D)
+    || (n.ingest && roleFilter.value.I)
+    || (n.coordinating && roleFilter.value.C)
 }))
 
 const chartData = computed(() => ({
@@ -173,7 +176,7 @@ async function load() {
     return
   }
   loading.value = true
-  const resp = await apiCall('POST', '/nodes', { host: clusterHost.value })
+  const resp = await apiCall('POST', '/nodes', { host: clusterHost.value }, { suppressErrorAlert: true })
   if (resp?.status === 200 && Array.isArray(resp.body)) {
     nodes.value = resp.body
     error.value = ''

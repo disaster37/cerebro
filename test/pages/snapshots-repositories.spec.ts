@@ -41,7 +41,7 @@ describe('repositories page', () => {
     ;(globalThis as any).$fetch.mockReset()
   })
 
-  it('loads repositories and verifies one on click', async () => {
+  it('auto-verifies repositories on load and renders status and size', async () => {
     setConnection()
     ;(globalThis as any).$fetch
       .mockResolvedValueOnce({ status: 200, body: repositories })
@@ -57,11 +57,6 @@ describe('repositories page', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('backups')
-    const verifyButton = wrapper.findAll('button').find((b) => b.text() === 'Verify')
-    expect(verifyButton).toBeTruthy()
-    await verifyButton!.trigger('click')
-    await flushPromises()
-
     expect((globalThis as any).$fetch).toHaveBeenCalledWith('/repositories/verify', expect.objectContaining({
       body: { host: 'https://es:9200', name: 'backups', forceFullSize: false },
     }))
@@ -77,11 +72,21 @@ describe('repositories page', () => {
 
     const wrapper = mount(RepositoryPage)
     await flushPromises()
-    await wrapper.findAll('button').find((b) => b.text() === 'Verify')!.trigger('click')
-    await flushPromises()
 
     expect(wrapper.text()).toContain('Verification failed')
     expect(wrapper.text()).toContain('bucket not found')
+  })
+
+  it('does not auto-verify large repository lists', async () => {
+    setConnection()
+    const many = Array.from({ length: 11 }, (_, i) => ({ name: `repo-${i}`, type: 'fs', settings: { location: `/tmp/${i}` } }))
+    ;(globalThis as any).$fetch.mockResolvedValueOnce({ status: 200, body: many })
+
+    const wrapper = mount(RepositoryPage)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('repo-0')
+    expect((globalThis as any).$fetch).not.toHaveBeenCalledWith('/repositories/verify', expect.anything())
   })
 })
 

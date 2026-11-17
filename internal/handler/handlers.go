@@ -45,6 +45,7 @@ type Handlers struct {
 	Snapshots       *service.SnapshotsService
 	Templates       *service.TemplatesService
 	Policies        *service.PoliciesService
+	DataStreams     *service.DataStreamsService
 }
 
 // Processor is the uniform service-method signature: every service method

@@ -64,3 +64,31 @@ POST _search
     expect(curl).toContain('"match_all"')
   })
 })
+
+describe('consoleParser CRLF and comments', () => {
+  it('parses CRLF documents and preserves exact offsets', () => {
+    const doc = 'GET _cluster/health\r\n\r\nPOST _search\r\n{\r\n  "query": { "match_all": {} }\r\n}\r\n'
+    const requests = parseConsoleDocument(doc)
+    expect(requests).toHaveLength(2)
+    expect(requests[0]!.path).toBe('_cluster/health')
+    expect(requests[1]!.path).toBe('_search')
+    expect(requests[1]!.rawBody).toContain('"match_all"')
+    expect(doc.slice(requests[1]!.headerFrom, requests[1]!.headerTo).replace(/\r$/, '')).toBe('POST _search')
+  })
+
+  it('tolerates comment lines before and inside a JSON body', () => {
+    const doc = `POST _search
+# leading comment
+{
+  // inside comment
+  "query": { "match_all": {} }
+}
+`
+    const requests = parseConsoleDocument(doc)
+    expect(requests).toHaveLength(1)
+    expect(requests[0]!.rawBody).toContain('"match_all"')
+    expect(requests[0]!.rawBody).not.toContain('leading comment')
+    expect(requests[0]!.rawBody).not.toContain('inside comment')
+    expect(() => JSON.parse(requests[0]!.rawBody)).not.toThrow()
+  })
+})

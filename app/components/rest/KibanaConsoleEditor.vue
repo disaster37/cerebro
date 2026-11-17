@@ -4,11 +4,12 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { EditorState, Compartment, RangeSetBuilder } from '@codemirror/state'
+import { EditorState, Compartment, RangeSetBuilder, type Range } from '@codemirror/state'
 import {
   Decoration,
   EditorView,
   GutterMarker,
+  WidgetType,
   crosshairCursor,
   drawSelection,
   dropCursor,
@@ -22,7 +23,7 @@ import {
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { bracketMatching, defaultHighlightStyle, foldGutter, indentOnInput, syntaxHighlighting } from '@codemirror/language'
 import { json } from '@codemirror/lang-json'
-import { autocompletion } from '@codemirror/autocomplete'
+import { acceptCompletion, autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { lintGutter, linter } from '@codemirror/lint'
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import type { RestMetadata } from '../../types/cerebro'
@@ -43,6 +44,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'send', request: ParsedConsoleRequest): void
+  (e: 'copy-curl', request: ParsedConsoleRequest): void
   (e: 'active-change', request: ParsedConsoleRequest): void
 }>()
 
@@ -70,6 +72,66 @@ class PlayMarker extends GutterMarker {
   }
 }
 
+class RequestHeaderActionsWidget extends WidgetType {
+  constructor(
+    private readonly request: ParsedConsoleRequest,
+    private readonly onSend: (request: ParsedConsoleRequest) => void,
+    private readonly onCopy: (request: ParsedConsoleRequest) => void,
+    private readonly onFormat: (request: ParsedConsoleRequest) => void,
+  ) {
+    super()
+  }
+
+  eq(other: RequestHeaderActionsWidget) {
+    return other.request.from === this.request.from && other.request.to === this.request.to
+  }
+
+  toDOM() {
+    const span = document.createElement('span')
+    span.className = 'cm-header-actions'
+
+    const send = document.createElement('button')
+    send.type = 'button'
+    send.textContent = '▶ Send'
+    send.title = 'Send request'
+    send.addEventListener('mousedown', (event) => {
+      event.preventDefault()
+      this.onSend(this.request)
+    })
+    span.appendChild(send)
+
+    const copy = document.createElement('button')
+    copy.type = 'button'
+    copy.textContent = 'Copy as cURL'
+    copy.title = 'Copy as cURL'
+    copy.addEventListener('mousedown', (event) => {
+      event.preventDefault()
+      this.onCopy(this.request)
+      copy.textContent = 'Copied!'
+      setTimeout(() => { copy.textContent = 'Copy as cURL' }, 1500)
+    })
+    span.appendChild(copy)
+
+    if (this.request.bodyFrom !== null) {
+      const indent = document.createElement('button')
+      indent.type = 'button'
+      indent.textContent = 'Auto-indent'
+      indent.title = 'Auto-indent request body'
+      indent.addEventListener('mousedown', (event) => {
+        event.preventDefault()
+        this.onFormat(this.request)
+      })
+      span.appendChild(indent)
+    }
+
+    return span
+  }
+
+  ignoreEvent() {
+    return false
+  }
+}
+
 function playMarkers(editorView: EditorView) {
   const builder = new RangeSetBuilder<GutterMarker>()
   const requests = parseConsoleDocument(editorView.state.doc.toString())
@@ -80,13 +142,37 @@ function playMarkers(editorView: EditorView) {
   return builder.finish()
 }
 
-function activeRequestDecorations(editorView: EditorView) {
-  const requests = parseConsoleDocument(editorView.state.doc.toString())
-  const request = findRequestAtOffset(requests, editorView.state.selection.main.head)
-  if (!request) return Decoration.none
-  return Decoration.set([
-    Decoration.mark({ class: 'cm-active-request' }).range(request.from, request.to),
-  ])
+// buildConsoleDecorations receives an EditorState (Facet.compute passes the
+// state, not the view). It highlights the active request block with line
+// decorations and attaches the hover action widget to every request header.
+function buildConsoleDecorations(state: EditorState) {
+  const requests = parseConsoleDocument(state.doc.toString())
+  const decorations: Range<Decoration>[] = []
+
+  const active = findRequestAtOffset(requests, state.selection.main.head)
+  if (active) {
+    const startLine = state.doc.lineAt(active.from).number
+    const endLine = state.doc.lineAt(active.to).number
+    for (let n = startLine; n <= endLine; n++) {
+      const line = state.doc.line(n)
+      decorations.push(Decoration.line({ class: 'cm-active-request-line' }).range(line.from))
+    }
+  }
+
+  for (const request of requests) {
+    const headerLine = state.doc.line(request.headerLine)
+    decorations.push(Decoration.widget({
+      widget: new RequestHeaderActionsWidget(
+        request,
+        (r) => emit('send', r),
+        (r) => emit('copy-curl', r),
+        (r) => formatRequest(r),
+      ),
+      side: 1,
+    }).range(headerLine.to))
+  }
+
+  return Decoration.set(decorations, true)
 }
 
 function darkTheme() {
@@ -97,6 +183,15 @@ function darkTheme() {
     '.cm-activeLine': { backgroundColor: 'rgba(255,255,255,0.04)' },
     '.cm-activeLineGutter': { backgroundColor: 'rgba(255,255,255,0.06)' },
     '.cm-selectionBackground, ::selection': { backgroundColor: 'rgba(56,189,248,0.25)' },
+    '.cm-tooltip.cm-tooltip-autocomplete': {
+      backgroundColor: '#18181b',
+      color: '#e4e4e7',
+      border: '1px solid #3f3f46',
+    },
+    '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+      backgroundColor: 'rgba(56,189,248,0.2)',
+      color: '#f4f4f5',
+    },
   }, { dark: true })
 }
 
@@ -129,14 +224,18 @@ function sendActive() {
   return true
 }
 
-function formatActive() {
+function formatRequest(request: ParsedConsoleRequest) {
   if (!view) return false
-  const request = currentRequest()
-  if (!request) return false
   const formatted = formatRequestBlockBody(view.state.doc.toString(), request)
   if (!formatted) return false
   view.dispatch({ changes: { from: formatted.from, to: formatted.to, insert: formatted.insert } })
   return true
+}
+
+function formatActive() {
+  const request = currentRequest()
+  if (!request) return false
+  return formatRequest(request)
 }
 
 defineExpose({ sendActive, formatActive })
@@ -160,17 +259,20 @@ onMounted(() => {
         history(),
         indentOnInput(),
         bracketMatching(),
+        closeBrackets(),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         json(),
         linter(validateConsoleDocument),
         lintGutter(),
-        autocompletion({ override: [createConsoleCompletionSource(metaRef)] }),
+        autocompletion({ activateOnTyping: true, override: [createConsoleCompletionSource(metaRef)] }),
         highlightSelectionMatches(),
         gutter({ class: 'cm-play-gutter', markers: playMarkers }),
-        EditorView.decorations.compute(['doc', 'selection'], activeRequestDecorations),
+        EditorView.decorations.compute(['doc', 'selection'], buildConsoleDecorations),
         keymap.of([
           { key: 'Mod-Enter', run: () => sendActive() },
           { key: 'Mod-Shift-f', run: () => formatActive() },
+          { key: 'Tab', run: acceptCompletion },
+          ...closeBracketsKeymap,
           ...defaultKeymap,
           ...historyKeymap,
           ...searchKeymap,

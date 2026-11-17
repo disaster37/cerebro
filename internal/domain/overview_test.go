@@ -29,7 +29,7 @@ func TestClusterOverviewPopulatesDocsSizeShardsAndAllocation(t *testing.T) {
 	nodesInfo := json.RawMessage(`{"nodes":{"node1":{"version":"9.4.3","attributes":{"zone":"a","ml.machine_memory":"1","xpack.installed":"true"},"os":{"available_processors":4},"jvm":{"version":"21"}}}}`)
 	nodesStats := json.RawMessage(`{"nodes":{"node1":{"name":"n1","host":"h1","ip":"1.1.1.1","roles":["cluster_manager","data"],"os":{"cpu":{"percent":12,"load_average":{"1m":0.5}}},"jvm":{"mem":{"heap_used_in_bytes":10,"heap_max_in_bytes":100,"heap_used_percent":10}},"fs":{"total":{"total_in_bytes":100,"free_in_bytes":40}}}}}`)
 
-	body, err := ClusterOverview(state, nodesStats, idxStats, settings, aliases, health, nodesInfo)
+	body, err := ClusterOverview(state, nodesStats, idxStats, settings, aliases, health, nodesInfo, nil)
 	if err != nil {
 		t.Fatalf("ClusterOverview: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestClusterOverviewPopulatesDocsSizeShardsAndAllocation(t *testing.T) {
 func TestClusterOverviewClosedIndexAndEmptySlices(t *testing.T) {
 	state := json.RawMessage(`{"master_node":"n1","routing_table":{"indices":{}},"blocks":{"indices":{"closed-idx":{"4":{"read_only":true}}}}}`)
 	idxStats := json.RawMessage(`{"_all":{"primaries":{"docs":{"count":0}},"total":{"store":{"size_in_bytes":0}}},"indices":{}}`)
-	body, err := ClusterOverview(state, json.RawMessage(`{}`), idxStats, json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`))
+	body, err := ClusterOverview(state, json.RawMessage(`{}`), idxStats, json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), nil)
 	if err != nil {
 		t.Fatalf("ClusterOverview: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestClusterOverviewClosedIndexAndEmptySlices(t *testing.T) {
 func TestClusterOverviewTransientAllocationWins(t *testing.T) {
 	state := json.RawMessage(`{"master_node":"n1","routing_table":{"indices":{}},"blocks":{}}`)
 	settings := json.RawMessage(`{"persistent":{"cluster":{"routing":{"allocation":{"enable":"all"}}}},"transient":{"cluster":{"routing":{"allocation":{"enable":"none"}}}}}`)
-	body, err := ClusterOverview(state, json.RawMessage(`{}`), json.RawMessage(`{}`), settings, json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`))
+	body, err := ClusterOverview(state, json.RawMessage(`{}`), json.RawMessage(`{}`), settings, json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), nil)
 	if err != nil {
 		t.Fatalf("ClusterOverview: %v", err)
 	}
@@ -120,5 +120,95 @@ func TestClusterOverviewTransientAllocationWins(t *testing.T) {
 	_ = json.Unmarshal(body, &out)
 	if out.ShardAllocation {
 		t.Error("shard_allocation = true, want false when transient disables allocation")
+	}
+}
+
+func TestClusterOverviewIndexHealthAndUnreplicated(t *testing.T) {
+	state := json.RawMessage(`{
+		"cluster_manager_node": "n1",
+		"routing_table": {"indices": {
+			"yellow-idx": {"shards": {
+				"0": [
+					{"index":"yellow-idx","shard":0,"primary":true,"state":"STARTED","node":"n1"},
+					{"index":"yellow-idx","shard":0,"primary":false,"state":"UNASSIGNED","node":null,"unassigned_info":{"reason":"NO_REPLICA","at":"2024-01-01T00:00:00Z","details":"only one node","last_allocation_status":"no"}}
+				]
+			}},
+			"red-idx": {"shards": {
+				"0": [
+					{"index":"red-idx","shard":0,"primary":true,"state":"UNASSIGNED","node":null,"unassigned_info":{"reason":"INDEX_CREATED"}}
+				]
+			}},
+			"single-idx": {"shards": {
+				"0": [
+					{"index":"single-idx","shard":0,"primary":true,"state":"STARTED","node":"n1"}
+				]
+			}}
+		}},
+		"blocks": {"indices": {}}
+	}`)
+	body, err := ClusterOverview(state, json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), nil)
+	if err != nil {
+		t.Fatalf("ClusterOverview: %v", err)
+	}
+	var out struct {
+		Indices []OverviewIndex `json:"indices"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	byName := map[string]OverviewIndex{}
+	for _, idx := range out.Indices {
+		byName[idx.Name] = idx
+	}
+	yellow := byName["yellow-idx"]
+	if yellow.Status != "yellow" || !yellow.Unhealthy || yellow.UnassignedShardCount != 1 {
+		t.Errorf("yellow index = %+v, want yellow with 1 unassigned", yellow)
+	}
+	unassigned := yellow.Shards["unassigned"]
+	if len(unassigned) != 1 || unassigned[0].UnassignedInfo == nil || unassigned[0].UnassignedInfo.Reason != "NO_REPLICA" {
+		t.Errorf("unassigned shard info = %+v, want NO_REPLICA", unassigned)
+	}
+	red := byName["red-idx"]
+	if red.Status != "red" || !red.Unhealthy {
+		t.Errorf("red index = %+v, want red", red)
+	}
+	single := byName["single-idx"]
+	if single.Status != "green" || !single.Unreplicated {
+		t.Errorf("single index = %+v, want green and unreplicated", single)
+	}
+}
+
+func TestClusterOverviewDataStreamBackingIndex(t *testing.T) {
+	state := json.RawMessage(`{
+		"cluster_manager_node": "n1",
+		"routing_table": {"indices": {
+			".ds-logs-app-000001": {"shards": {
+				"0": [{"index":".ds-logs-app-000001","shard":0,"primary":true,"state":"STARTED","node":"n1"}]
+			}}
+		}},
+		"blocks": {"indices": {}}
+	}`)
+	idxStats := json.RawMessage(`{"indices":{".ds-logs-app-000001":{"primaries":{"docs":{"count":7},"store":{"size_in_bytes":100}},"total":{"store":{"size_in_bytes":100}}}}}`)
+	dataStreams := json.RawMessage(`{"data_streams":[{"name":"logs-app","timestamp_field":{"name":"@timestamp"},"indices":[{"index_name":".ds-logs-app-000001"}],"generation":1,"status":"GREEN","template":"logs-app-template"}]}`)
+	body, err := ClusterOverview(state, json.RawMessage(`{}`), idxStats, json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), dataStreams)
+	if err != nil {
+		t.Fatalf("ClusterOverview: %v", err)
+	}
+	var out struct {
+		Indices     []OverviewIndex     `json:"indices"`
+		DataStreams []DataStreamSummary `json:"data_streams"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Indices) != 1 {
+		t.Fatalf("indices = %d, want 1", len(out.Indices))
+	}
+	idx := out.Indices[0]
+	if idx.Special || !idx.BackingIndex || idx.DataStream != "logs-app" || !idx.IsWriteIndex {
+		t.Errorf("backing index = %+v, want non-special backing index of logs-app (write)", idx)
+	}
+	if len(out.DataStreams) != 1 || out.DataStreams[0].DocCount != 7 || out.DataStreams[0].SizeInBytes != 100 {
+		t.Errorf("data streams = %+v, want aggregated docs/size", out.DataStreams)
 	}
 }

@@ -208,7 +208,7 @@ async function load() {
     return
   }
   loading.value = true
-  const resp = await apiCall('POST', '/repositories', { host: clusterHost.value })
+  const resp = await apiCall('POST', '/repositories', { host: clusterHost.value }, { suppressErrorAlert: true })
   if (resp?.status === 200) {
     repos.value = resp.body || []
     error.value = ''
@@ -219,6 +219,11 @@ async function load() {
       : `Failed to load repositories (${resp?.status || 'network error'}).`
   }
   loading.value = false
+  // Populate status/snapshots/size immediately for small repository lists
+  // instead of leaving every row "Unchecked" until a manual click.
+  if (repos.value.length > 0 && repos.value.length <= 10) {
+    void verifyAll()
+  }
 }
 
 async function verify(name: string, forceFullSize = false) {

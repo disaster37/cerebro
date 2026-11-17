@@ -58,35 +58,85 @@ type RepositorySizeStats struct {
 	HasStats           bool
 }
 
+type byteCounter struct {
+	SizeInBytes *int64 `json:"size_in_bytes"`
+}
+
+// snapshotStatsWire covers both the nested _status shape
+// (incremental/processed/total) and the flat SnapshotInfo shape
+// (processed_size_in_bytes/total_size_in_bytes).
+type snapshotStatsWire struct {
+	Incremental          *byteCounter `json:"incremental"`
+	Processed            *byteCounter `json:"processed"`
+	Total                *byteCounter `json:"total"`
+	ProcessedSizeInBytes *int64       `json:"processed_size_in_bytes"`
+	TotalSizeInBytes     *int64       `json:"total_size_in_bytes"`
+}
+
 // ParseRepositorySizeStats sums incremental snapshot sizes and takes the max
 // total (logical) size from a GET /_snapshot/{repo}/_all or _all/_status body.
+// HasStats is only true when real byte statistics are present.
 func ParseRepositorySizeStats(in json.RawMessage) (RepositorySizeStats, error) {
 	var raw struct {
 		Snapshots []struct {
-			Stats *struct {
-				Incremental struct {
-					SizeInBytes int64 `json:"size_in_bytes"`
-				} `json:"incremental"`
-				Total struct {
-					SizeInBytes int64 `json:"size_in_bytes"`
-				} `json:"total"`
-			} `json:"stats"`
+			Stats *snapshotStatsWire `json:"stats"`
 		} `json:"snapshots"`
 	}
 	if err := json.Unmarshal(in, &raw); err != nil {
 		return RepositorySizeStats{}, err
 	}
 	out := RepositorySizeStats{}
+	var processedSum, maxTotal int64
 	for _, snap := range raw.Snapshots {
 		if snap.Stats == nil {
 			continue
 		}
-		out.HasStats = true
-		out.SizeInBytes += snap.Stats.Incremental.SizeInBytes
-		if snap.Stats.Total.SizeInBytes > out.LogicalSizeInBytes {
-			out.LogicalSizeInBytes = snap.Stats.Total.SizeInBytes
+		stats := snap.Stats
+		hasBytes := false
+
+		var incremental int64
+		if stats.Incremental != nil && stats.Incremental.SizeInBytes != nil {
+			incremental = *stats.Incremental.SizeInBytes
+			hasBytes = true
+		} else if stats.ProcessedSizeInBytes != nil {
+			incremental = *stats.ProcessedSizeInBytes
+			hasBytes = true
+		}
+		if stats.Processed != nil && stats.Processed.SizeInBytes != nil {
+			processedSum += *stats.Processed.SizeInBytes
+			hasBytes = true
+		}
+
+		var total int64
+		if stats.Total != nil && stats.Total.SizeInBytes != nil {
+			total = *stats.Total.SizeInBytes
+			hasBytes = true
+		}
+		if stats.TotalSizeInBytes != nil {
+			if *stats.TotalSizeInBytes > total {
+				total = *stats.TotalSizeInBytes
+			}
+			hasBytes = true
+		}
+		if total > maxTotal {
+			maxTotal = total
+		}
+		if hasBytes {
+			out.HasStats = true
+		}
+		out.SizeInBytes += incremental
+	}
+	if out.SizeInBytes == 0 && maxTotal > 0 {
+		// A deleted base snapshot can leave only zero-incremental snapshots
+		// behind; fall back to the processed/total bytes so a non-empty
+		// repository never reports 0 B.
+		if processedSum > 0 {
+			out.SizeInBytes = processedSum
+		} else {
+			out.SizeInBytes = maxTotal
 		}
 	}
+	out.LogicalSizeInBytes = maxTotal
 	return out, nil
 }
 

@@ -5,7 +5,9 @@ import (
 	"sort"
 )
 
-func AutocompletionIndices(aliases json.RawMessage) (json.RawMessage, error) {
+// AutocompletionIndices merges index names, aliases and (optionally) data
+// stream names into the DevTools autocomplete index list.
+func AutocompletionIndices(aliases json.RawMessage, dataStreams ...json.RawMessage) (json.RawMessage, error) {
 	var raw map[string]struct {
 		Aliases map[string]json.RawMessage `json:"aliases"`
 	}
@@ -26,12 +28,26 @@ func AutocompletionIndices(aliases json.RawMessage) (json.RawMessage, error) {
 			}
 		}
 	}
+	if len(dataStreams) > 0 {
+		streams, _, err := ParseDataStreams(dataStreams[0])
+		if err == nil {
+			for _, ds := range streams {
+				if !seen[ds.Name] {
+					seen[ds.Name] = true
+					out = append(out, ds.Name)
+				}
+			}
+		}
+	}
+	sort.Strings(out)
 	return json.Marshal(out)
 }
 
 // ExtractMappingFields walks a GET /_mapping response and returns the
 // deduplicated, sorted field paths per index plus the union of all fields.
-func ExtractMappingFields(mappingJSON json.RawMessage) (map[string][]string, []string, error) {
+// When backing-index metadata is supplied, fields from `.ds-*` backing indices
+// are also aggregated under their parent data stream name.
+func ExtractMappingFields(mappingJSON json.RawMessage, backingMeta ...map[string]DataStreamBackingMeta) (map[string][]string, []string, error) {
 	var raw map[string]struct {
 		Mappings json.RawMessage `json:"mappings"`
 	}
@@ -39,8 +55,14 @@ func ExtractMappingFields(mappingJSON json.RawMessage) (map[string][]string, []s
 		return nil, nil, err
 	}
 
+	var meta map[string]DataStreamBackingMeta
+	if len(backingMeta) > 0 {
+		meta = backingMeta[0]
+	}
+
 	fieldsByIndex := make(map[string][]string, len(raw))
 	allSet := map[string]bool{}
+	streamFields := map[string]map[string]bool{}
 	for index, entry := range raw {
 		var mappings any
 		_ = json.Unmarshal(entry.Mappings, &mappings)
@@ -50,6 +72,22 @@ func ExtractMappingFields(mappingJSON json.RawMessage) (map[string][]string, []s
 		for _, f := range fields {
 			allSet[f] = true
 		}
+		if ds, ok := meta[index]; ok && ds.DataStream != "" {
+			if streamFields[ds.DataStream] == nil {
+				streamFields[ds.DataStream] = map[string]bool{}
+			}
+			for _, f := range fields {
+				streamFields[ds.DataStream][f] = true
+			}
+		}
+	}
+	for stream, set := range streamFields {
+		fields := make([]string, 0, len(set))
+		for f := range set {
+			fields = append(fields, f)
+		}
+		sort.Strings(fields)
+		fieldsByIndex[stream] = fields
 	}
 
 	allFields := make([]string, 0, len(allSet))

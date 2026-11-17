@@ -218,7 +218,7 @@ async function load() {
     return
   }
   loading.value = true
-  const resp = await apiCall('POST', '/snapshots', { host: clusterHost.value })
+  const resp = await apiCall('POST', '/snapshots', { host: clusterHost.value }, { suppressErrorAlert: true })
   if (resp?.status === 200) {
     repos.value = resp.body?.repositories || []
     clusterIndices.value = (resp.body?.indices || []).map((i: any) => i.name)
@@ -239,7 +239,7 @@ async function load() {
 async function loadSnapshots(repo: string) {
   if (!repo) return
   loading.value = true
-  const resp = await apiCall('POST', '/snapshots/load', { host: clusterHost.value, repository: repo })
+  const resp = await apiCall('POST', '/snapshots/load', { host: clusterHost.value, repository: repo }, { suppressErrorAlert: true })
   if (resp?.status === 200) {
     snapshots.value = resp.body || []
     error.value = ''

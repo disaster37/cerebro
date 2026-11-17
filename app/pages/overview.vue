@@ -40,7 +40,8 @@
       <div class="mb-3 flex flex-wrap items-center gap-3">
         <UInput v-model="indexFilter" size="sm" icon="i-lucide-search" placeholder="Filter indices / aliases..." class="w-64" />
         <UCheckbox v-model="showClosed" :label="`closed (${data.closed_indices})`" />
-        <UCheckbox v-model="showSpecial" :label="`.special (${data.special_indices})`" />
+        <UCheckbox v-model="showSpecial" :label="specialLabel" />
+        <UCheckbox v-model="showBacking" label="backing (.ds)" />
         <UCheckbox v-model="unhealthyOnly" label="unhealthy only" :disabled="!hasUnhealthyShards" />
         <UInput v-model="nodeFilter" size="sm" icon="i-lucide-server" placeholder="Filter nodes..." class="w-48" />
         <div class="flex items-center gap-1">
@@ -55,7 +56,34 @@
             {{ role.label }}
           </UButton>
         </div>
+        <UBadge
+          v-if="dataStreamFilter"
+          color="primary"
+          variant="soft"
+          class="cursor-pointer"
+          data-testid="overview-datastream-filter"
+          @click="dataStreamFilter = ''"
+        >
+          Data stream: {{ dataStreamFilter }} [Clear]
+        </UBadge>
       </div>
+
+      <UAlert
+        v-if="unhealthyIndices.length"
+        color="warning"
+        variant="soft"
+        class="mb-3"
+        data-testid="unhealthy-banner"
+      >
+        <template #description>
+          <div class="flex flex-wrap items-center gap-2">
+            <span>{{ unhealthyIndices.length }} indices have unassigned or initializing shards.</span>
+            <UButton size="xs" color="warning" variant="soft" @click="focusUnhealthy">
+              Focus unhealthy indices
+            </UButton>
+          </div>
+        </template>
+      </UAlert>
 
       <div class="overflow-x-auto rounded-lg ring-1 ring-neutral-200 dark:ring-neutral-800">
         <table class="w-full table-fixed border-collapse text-xs">
@@ -87,7 +115,12 @@
                   <USelect v-model="pageSize" :items="pageSizes" size="xs" class="w-16" />
                 </div>
               </th>
-              <th v-for="idx in pagedIndices" :key="idx.name" class="min-w-40 border-l border-neutral-200 p-2 text-left align-top dark:border-neutral-800">
+              <th
+                v-for="idx in pagedIndices"
+                :key="idx.name"
+                class="min-w-40 border-l border-neutral-200 p-2 text-left align-top dark:border-neutral-800"
+                :class="indexHeaderClass(idx)"
+              >
                 <div class="flex items-center justify-between gap-1">
                   <span class="truncate font-semibold" :title="idx.name">{{ idx.name }}</span>
                   <UDropdownMenu :items="indexMenu(idx)">
@@ -95,6 +128,31 @@
                   </UDropdownMenu>
                 </div>
                 <div class="mt-1 flex flex-wrap items-center gap-1">
+                  <UBadge
+                    v-if="idx.status === 'red' || idx.status === 'yellow'"
+                    :color="idx.status === 'red' ? 'error' : 'warning'"
+                    variant="soft"
+                  >
+                    {{ idx.status }} ({{ idx.unassigned_shard_count }} unassigned)
+                  </UBadge>
+                  <UBadge
+                    v-if="idx.unreplicated"
+                    color="warning"
+                    variant="outline"
+                    title="number_of_replicas is 0 (no replica copies)"
+                  >
+                    0 replicas
+                  </UBadge>
+                  <UBadge
+                    v-if="idx.data_stream"
+                    color="primary"
+                    variant="soft"
+                    class="cursor-pointer"
+                    @click="filterByDataStream(idx.data_stream)"
+                  >
+                    DS: {{ idx.data_stream }}
+                  </UBadge>
+                  <UBadge v-if="idx.is_write_index" color="info" variant="soft">write</UBadge>
                   <UBadge v-if="idx.aliases?.length" color="info" variant="soft" :title="idx.aliases.join(', ')">
                     {{ idx.aliases[0] }}<span v-if="idx.aliases.length > 1"> (+{{ idx.aliases.length - 1 }})</span>
                   </UBadge>
@@ -117,10 +175,11 @@
               <td v-for="idx in pagedIndices" :key="`unassigned-${idx.name}`" class="border-l border-neutral-200 p-2 align-top dark:border-neutral-800">
                 <div class="flex flex-wrap gap-1">
                   <button
-                    v-for="shard in (idx.shards?.unassigned || [])"
-                    :key="`${shard.shard}-${shard.state}`"
-                    class="shard-badge shard-badge--unassigned shard-badge--replica"
-                    :title="`Shard ${shard.shard} ${shard.state}`"
+                    v-for="(shard, sIdx) in (idx.shards?.unassigned || [])"
+                    :key="`${shard.shard}-${shard.primary ? 'p' : 'r'}-${shard.state}-${sIdx}`"
+                    class="shard-badge"
+                    :class="shard.primary ? 'shard-badge--unassigned-primary shard-badge--primary' : 'shard-badge--unassigned shard-badge--replica'"
+                    :title="`${shard.primary ? 'PRIMARY' : 'REPLICA'} shard ${shard.shard} ${shard.state}${shard.unassigned_info?.reason ? ` — ${shard.unassigned_info.reason}` : ''}`"
                     @click="inspectShard(idx, shard)"
                   >
                     {{ shard.shard }}
@@ -208,7 +267,7 @@ import ClusterMetricsCharts from '../components/charts/ClusterMetricsCharts.vue'
 import NodeResourceBars from '../components/overview/NodeResourceBars.vue'
 import JsonInspectorModal from '../components/JsonInspectorModal.vue'
 import ConfirmActionModal from '../components/ConfirmActionModal.vue'
-import { extractEnvelopeError, useAPI } from '../composables/useAPI'
+import { extractEnvelopeError, pushAlert, useAPI } from '../composables/useAPI'
 import { useCluster } from '../composables/useCluster'
 import type { OverviewData, OverviewIndex, OverviewNode, OverviewShard } from '../types/cerebro'
 import { formatBytes, formatNumber } from '../utils/format'
@@ -225,7 +284,9 @@ const indexFilter = ref('')
 const nodeFilter = ref('')
 const showClosed = ref(false)
 const showSpecial = ref(false)
+const showBacking = ref(true)
 const unhealthyOnly = ref(false)
+const dataStreamFilter = ref('')
 const roleFilter = ref<Record<string, boolean>>({ M: true, D: true, I: true, C: true })
 const indexSortKey = ref('name')
 const indexSortDir = ref<'asc' | 'desc'>('asc')
@@ -291,11 +352,21 @@ const hasUnhealthyShards = computed(() => Boolean(
   data.value && ((data.value.unassigned_shards || 0) > 0 || (data.value.relocating_shards || 0) > 0 || (data.value.initializing_shards || 0) > 0),
 ))
 
+const unhealthyIndices = computed(() => (data.value?.indices || []).filter((i) => !i.closed && i.unhealthy))
+
+const specialLabel = computed(() => {
+  const total = data.value?.special_indices || 0
+  const unhealthy = (data.value?.indices || []).filter((i) => i.special && i.unhealthy).length
+  return unhealthy ? `.special (${total}, ${unhealthy} unhealthy)` : `.special (${total})`
+})
+
 const filteredIndices = computed(() => {
   let indices = data.value?.indices || []
   if (!showClosed.value) indices = indices.filter((i) => !i.closed)
-  if (!showSpecial.value) indices = indices.filter((i) => !i.special)
+  if (!showSpecial.value) indices = indices.filter((i) => !i.special || (showBacking.value && i.backing_index))
+  if (!showBacking.value) indices = indices.filter((i) => !i.backing_index)
   if (unhealthyOnly.value) indices = indices.filter((i) => i.unhealthy)
+  if (dataStreamFilter.value) indices = indices.filter((i) => i.data_stream === dataStreamFilter.value)
   if (indexFilter.value) {
     let matcher: (value: string) => boolean
     try {
@@ -331,11 +402,14 @@ const filteredNodes = computed(() => {
     nodes = nodes.filter((n) => `${n.name} ${n.host} ${n.ip}`.toLowerCase().includes(needle))
   }
   return nodes.filter((n) => {
-    if (n.master && !roleFilter.value.M) return false
-    if (n.data && !roleFilter.value.D) return false
-    if (n.ingest && !roleFilter.value.I) return false
-    if (n.coordinating && !roleFilter.value.C) return false
-    return true
+    const hasRole = n.master || n.data || n.ingest || n.coordinating
+    if (!hasRole) {
+      return roleFilter.value.M && roleFilter.value.D && roleFilter.value.I && roleFilter.value.C
+    }
+    return (n.master && roleFilter.value.M)
+      || (n.data && roleFilter.value.D)
+      || (n.ingest && roleFilter.value.I)
+      || (n.coordinating && roleFilter.value.C)
   })
 })
 
@@ -348,16 +422,17 @@ const allocationMenu = computed(() => data.value?.shard_allocation
   : [{ label: 'Enable allocation', onSelect: () => enableAllocation() }])
 
 const bulkMenu = computed(() => [
-  { label: 'Close selected', onSelect: () => confirmBulk('Close selected indices?', 'Close', '/overview/close_indices') },
-  { label: 'Open selected', onSelect: () => confirmBulk('Open selected indices?', 'Open', '/overview/open_indices') },
-  { label: 'Force merge selected', onSelect: () => confirmBulk('Force merge selected indices?', 'Force merge', '/overview/force_merge') },
-  { label: 'Refresh selected', onSelect: () => confirmBulk('Refresh selected indices?', 'Refresh', '/overview/refresh_indices') },
-  { label: 'Flush selected', onSelect: () => confirmBulk('Flush selected indices?', 'Flush', '/overview/flush_indices') },
-  { label: 'Clear cache selected', onSelect: () => confirmBulk('Clear cache for selected indices?', 'Clear cache', '/overview/clear_indices_cache') },
-  { label: 'Delete selected', onSelect: () => confirmBulk('Delete selected indices? This cannot be undone.', 'Delete', '/overview/delete_indices') },
+  { label: 'Close selected', onSelect: () => confirmBulk('Close selected indices?', 'Close', '/overview/close_indices', 'Closed') },
+  { label: 'Open selected', onSelect: () => confirmBulk('Open selected indices?', 'Open', '/overview/open_indices', 'Opened') },
+  { label: 'Force merge selected', onSelect: () => confirmBulk('Force merge selected indices?', 'Force merge', '/overview/force_merge', 'Force merged') },
+  { label: 'Refresh selected', onSelect: () => confirmBulk('Refresh selected indices?', 'Refresh', '/overview/refresh_indices', 'Refreshed') },
+  { label: 'Flush selected', onSelect: () => confirmBulk('Flush selected indices?', 'Flush', '/overview/flush_indices', 'Flushed') },
+  { label: 'Clear cache selected', onSelect: () => confirmBulk('Clear cache for selected indices?', 'Clear cache', '/overview/clear_indices_cache', 'Cleared cache for') },
+  { label: 'Delete selected', onSelect: () => confirmBulk('Delete selected indices? This cannot be undone.', 'Delete', '/overview/delete_indices', 'Deleted') },
 ])
 
 function indexMenu(index: OverviewIndex) {
+  const closed = index.closed
   return [
     [
       { label: 'Show settings', onSelect: () => inspect('Settings', '/commons/get_index_settings', index.name) },
@@ -366,14 +441,49 @@ function indexMenu(index: OverviewIndex) {
       { label: 'Edit index settings', onSelect: () => navigateTo(`/index-settings?index=${encodeURIComponent(index.name)}`) },
     ],
     [
-      { label: index.closed ? 'Open' : 'Close', onSelect: () => runIndexAction(index.closed ? '/overview/open_indices' : '/overview/close_indices', index.name) },
-      { label: 'Force merge', onSelect: () => runIndexAction('/overview/force_merge', index.name) },
-      { label: 'Refresh', onSelect: () => runIndexAction('/overview/refresh_indices', index.name) },
-      { label: 'Flush', onSelect: () => runIndexAction('/overview/flush_indices', index.name) },
-      { label: 'Clear cache', onSelect: () => runIndexAction('/overview/clear_indices_cache', index.name) },
+      {
+        label: closed ? 'Open' : 'Close',
+        onSelect: () => closed
+          ? runIndexAction('/overview/open_indices', index.name, 'Opened index')
+          : confirmIndexAction('Close index?', 'Close', '/overview/close_indices', index.name, 'Closed index'),
+      },
+      {
+        label: 'Force merge',
+        disabled: closed,
+        onSelect: () => confirmIndexAction('Force merge index?', 'Force merge', '/overview/force_merge', index.name, 'Force merged index'),
+      },
+      { label: 'Refresh', disabled: closed, onSelect: () => runIndexAction('/overview/refresh_indices', index.name, 'Refreshed index') },
+      { label: 'Flush', disabled: closed, onSelect: () => runIndexAction('/overview/flush_indices', index.name, 'Flushed index') },
+      { label: 'Clear cache', disabled: closed, onSelect: () => runIndexAction('/overview/clear_indices_cache', index.name, 'Cleared cache for') },
     ],
-    [{ label: 'Delete', color: 'error', onSelect: () => runIndexAction('/overview/delete_indices', index.name) }],
+    [{
+      label: 'Delete',
+      color: 'error',
+      onSelect: () => confirmIndexAction('Delete index? This cannot be undone.', 'Delete', '/overview/delete_indices', index.name, 'Deleted index'),
+    }],
   ]
+}
+
+function indexHeaderClass(index: OverviewIndex) {
+  if (index.status === 'red') return 'border-t-2 border-t-rose-500 bg-rose-500/5'
+  if (index.status === 'yellow') return 'border-t-2 border-t-amber-500 bg-amber-500/5'
+  return ''
+}
+
+function focusUnhealthy() {
+  unhealthyOnly.value = true
+  indexSortKey.value = 'unhealthy'
+  indexSortDir.value = 'desc'
+  page.value = 0
+  if (unhealthyIndices.value.some((i) => i.special)) {
+    showSpecial.value = true
+  }
+}
+
+function filterByDataStream(name?: string) {
+  if (!name) return
+  dataStreamFilter.value = name
+  page.value = 0
 }
 
 function shardMenu(index: OverviewIndex, shard: OverviewShard) {
@@ -433,6 +543,7 @@ async function inspectShard(index: OverviewIndex, shard: OverviewShard) {
     index: index.name,
     shard: shard.shard,
     node: shard.node || 'unassigned',
+    primary: shard.primary,
   })
   inspectorTitle.value = `Shard ${shard.shard}: ${index.name}`
   inspectorData.value = resp?.body ?? resp
@@ -453,17 +564,53 @@ async function inspect(title: string, url: string, index: string) {
   inspectorOpen.value = true
 }
 
-async function runIndexAction(url: string, index: string) {
-  await apiCall('POST', url, { host: clusterHost.value, indices: index })
+function reportAction(resp: any, successLabel: string, target: string) {
+  if (resp?.status === 200) {
+    const failed = resp?.body?._shards?.failed
+    if (typeof failed === 'number' && failed > 0) {
+      pushAlert(`${successLabel} ${target} with ${failed} failed shard(s).`, 'warning')
+    } else {
+      pushAlert(`${successLabel} ${target}`, 'success')
+    }
+    return
+  }
+  const detail = extractEnvelopeError(resp?.body)
+  pushAlert(
+    detail
+      ? `${successLabel} ${target} failed (${resp?.status || 'network error'}): ${detail}`
+      : `${successLabel} ${target} failed (${resp?.status || 'network error'}).`,
+    'danger',
+  )
+}
+
+async function runIndexAction(url: string, index: string, successLabel: string) {
+  const resp = await apiCall('POST', url, { host: clusterHost.value, indices: index }, { suppressErrorAlert: true })
+  reportAction(resp, successLabel, index)
   await load()
 }
 
-function confirmBulk(title: string, label: string, url: string) {
+function confirmIndexAction(title: string, label: string, url: string, index: string, successLabel: string) {
   confirmTitle.value = title
-  confirmDescription.value = `This will affect ${filteredIndices.value.length} filtered indices.`
+  confirmDescription.value = `This will affect index ${index}.`
   confirmLabel.value = label
   pendingAction.value = async () => {
-    await apiCall('POST', url, { host: clusterHost.value, indices: filteredIndices.value.map((i) => i.name).join(',') })
+    await runIndexAction(url, index, successLabel)
+  }
+  confirmOpen.value = true
+}
+
+function confirmBulk(title: string, label: string, url: string, successLabel: string) {
+  const names = filteredIndices.value.map((i) => i.name)
+  if (!names.length) {
+    pushAlert('No indices selected.', 'warning')
+    return
+  }
+  confirmTitle.value = title
+  confirmDescription.value = `This will affect ${names.length} filtered indices.`
+  confirmLabel.value = label
+  pendingAction.value = async () => {
+    const resp = await apiCall('POST', url, { host: clusterHost.value, indices: names.join(',') }, { suppressErrorAlert: true })
+    reportAction(resp, successLabel, `${names.length} indices`)
     await load()
   }
   confirmOpen.value = true
@@ -492,7 +639,7 @@ async function load() {
     return
   }
   loading.value = true
-  const resp = await apiCall('POST', '/overview', { host: clusterHost.value })
+  const resp = await apiCall('POST', '/overview', { host: clusterHost.value }, { suppressErrorAlert: true })
   if (resp?.status === 200) {
     data.value = resp.body
     error.value = ''
@@ -516,7 +663,7 @@ function applyAutoRefresh() {
 }
 
 watch(autoRefresh, applyAutoRefresh)
-watch([indexFilter, showClosed, showSpecial, unhealthyOnly, pageSize], () => { page.value = 0 })
+watch([indexFilter, showClosed, showSpecial, showBacking, unhealthyOnly, dataStreamFilter, pageSize], () => { page.value = 0 })
 watch(pageCount, (count) => { if (page.value >= count) page.value = Math.max(count - 1, 0) })
 
 onMounted(() => {

@@ -47,11 +47,10 @@ func (o *osClient) do(ctx context.Context, target domain.ElasticServer,
 	}
 	if body != "" {
 		req.SetBody(body) // string bodies sent verbatim (Content-Length set)
-		if contentType != "" {
-			// Overrides the client-level global Content-Type: application/json
-			// that opensearch.New sets (needed for ndjson/bulk).
-			req.SetHeader("Content-Type", contentType)
+		if contentType == "" {
+			contentType = "application/json"
 		}
+		req.SetHeader("Content-Type", contentType)
 	}
 	resp, err := req.Execute(method, path) // relative path joined to placeholderURL
 	if err != nil {
@@ -115,31 +114,51 @@ func (o *osClient) Nodes(flags []string, ctx context.Context, target domain.Elas
 }
 
 func (o *osClient) CloseIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_close", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_close", nil, "", "")
 }
 
 func (o *osClient) OpenIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_open", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_open", nil, "", "")
 }
 
 func (o *osClient) RefreshIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_refresh", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_refresh", nil, "", "")
 }
 
 func (o *osClient) FlushIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_flush", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_flush", nil, "", "")
 }
 
 func (o *osClient) ForceMerge(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_forcemerge", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_forcemerge", nil, "", "")
 }
 
 func (o *osClient) ClearIndexCache(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_cache/clear", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_cache/clear", nil, "", "")
 }
 
 func (o *osClient) DeleteIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodDelete, "/"+url.PathEscape(index), nil, "", "")
+	return o.do(ctx, target, http.MethodDelete, "/"+escapeIndexList(splitIndexList(index)), nil, "", "")
+}
+
+func (o *osClient) AllocationExplain(index string, shard int, primary bool, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodPost, "/_cluster/allocation/explain", nil, allocationExplainBody(index, shard, primary), "")
+}
+
+func (o *osClient) GetDataStreams(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodGet, "/_data_stream", nil, "", "")
+}
+
+func (o *osClient) CreateDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodPut, "/_data_stream/"+url.PathEscape(name), nil, "", "")
+}
+
+func (o *osClient) DeleteDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodDelete, "/_data_stream/"+url.PathEscape(name), nil, "", "")
+}
+
+func (o *osClient) RolloverDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(name)+"/_rollover", nil, "", "")
 }
 
 func (o *osClient) GetIndexSettings(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
@@ -288,7 +307,12 @@ func (o *osClient) VerifyRepository(name string, ctx context.Context, target dom
 func (o *osClient) GetSnapshotStatus(repository, snapshot string, ignoreUnavailable bool, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	path := "/_snapshot/" + url.PathEscape(repository)
 	if snapshot != "" {
-		path += "/" + url.PathEscape(snapshot)
+		parts := splitIndexList(snapshot)
+		escaped := make([]string, 0, len(parts))
+		for _, part := range parts {
+			escaped = append(escaped, url.PathEscape(part))
+		}
+		path += "/" + strings.Join(escaped, ",")
 	}
 	path += "/_status"
 	params := url.Values{}

@@ -77,7 +77,9 @@ describe('overview and nodes pages', () => {
 
     expect(wrapper.find('[data-testid="overview-error"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Connect to Cluster')
-    expect((globalThis as any).useState('alerts').value).toHaveLength(1)
+    // Initial load suppresses the global alert because the page renders an
+    // inline error card.
+    expect((globalThis as any).useState('alerts').value).toHaveLength(0)
   })
 
   it('nodes renders an error card and alert on 502', async () => {
@@ -92,7 +94,7 @@ describe('overview and nodes pages', () => {
 
     expect(wrapper.find('[data-testid="nodes-error"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('bad gateway')
-    expect((globalThis as any).useState('alerts').value).toHaveLength(1)
+    expect((globalThis as any).useState('alerts').value).toHaveLength(0)
   })
 
   it('overview renders the shard allocation matrix and node resource bars', async () => {
@@ -175,5 +177,143 @@ describe('overview and nodes pages', () => {
     expect((globalThis as any).$fetch).not.toHaveBeenCalled()
     expect(wrapper.find('[data-testid="nodes-error"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('No active cluster connection')
+  })
+})
+
+describe('overview shard health', () => {
+  beforeEach(() => {
+    resetTestStubs()
+    vi.clearAllMocks()
+    ;(globalThis as any).$fetch.mockReset()
+  })
+
+  function baseBody(indices: any[], nodes: any[] = []) {
+    return {
+      cluster_name: 'prod',
+      status: 'yellow',
+      number_of_nodes: nodes.length,
+      active_shards: 1,
+      unassigned_shards: 2,
+      relocating_shards: 0,
+      initializing_shards: 0,
+      docs_count: 10,
+      size_in_bytes: 1024,
+      total_indices: indices.length,
+      closed_indices: 0,
+      special_indices: indices.filter((i) => i.special).length,
+      shard_allocation: true,
+      indices,
+      data_streams: [],
+      nodes,
+    }
+  }
+
+  it('renders per-index health, unassigned primary/replica badges and 0 replicas', async () => {
+    setConnection()
+    ;(globalThis as any).$fetch.mockResolvedValueOnce({
+      status: 200,
+      body: baseBody([{
+        name: 'idx', closed: false, special: false, backing_index: false, status: 'yellow', unhealthy: true,
+        unreplicated: true, unassigned_shard_count: 1, initializing_shard_count: 0, relocating_shard_count: 0,
+        doc_count: 10, deleted_docs: 0, size_in_bytes: 1024, total_size_in_bytes: 1024, aliases: [],
+        num_shards: 1, num_replicas: 0,
+        shards: {
+          unassigned: [
+            { index: 'idx', shard: 0, primary: false, state: 'UNASSIGNED', node: null, unassigned_info: { reason: 'NO_REPLICA' } },
+            { index: 'idx', shard: 0, primary: true, state: 'UNASSIGNED', node: null, unassigned_info: { reason: 'INDEX_CREATED' } },
+          ],
+        },
+      }]),
+    })
+
+    const wrapper = mountPage(OverviewPage)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('yellow (1 unassigned)')
+    expect(wrapper.text()).toContain('0 replicas')
+    expect(wrapper.find('[data-testid="unhealthy-banner"]').exists()).toBe(true)
+    expect(wrapper.findAll('.shard-badge--unassigned-primary').length).toBe(1)
+    expect(wrapper.findAll('.shard-badge--unassigned').length).toBe(1)
+    const titles = wrapper.findAll('.shard-badge').map((b) => b.attributes('title'))
+    expect(titles.some((t) => t?.includes('PRIMARY') && t?.includes('INDEX_CREATED'))).toBe(true)
+    expect(titles.some((t) => t?.includes('REPLICA') && t?.includes('NO_REPLICA'))).toBe(true)
+  })
+
+  it('shows data stream backing indices by default with DS and write badges', async () => {
+    setConnection()
+    ;(globalThis as any).$fetch.mockResolvedValueOnce({
+      status: 200,
+      body: baseBody([{
+        name: '.ds-logs-app-000001', closed: false, special: true, backing_index: true,
+        data_stream: 'logs-app', is_write_index: true, status: 'green', unhealthy: false,
+        unreplicated: false, unassigned_shard_count: 0, initializing_shard_count: 0, relocating_shard_count: 0,
+        doc_count: 10, deleted_docs: 0, size_in_bytes: 1024, total_size_in_bytes: 1024, aliases: [],
+        num_shards: 1, num_replicas: 0,
+        shards: { n1: [{ index: '.ds-logs-app-000001', shard: 0, primary: true, state: 'STARTED', node: 'n1' }] },
+      }], [{
+        id: 'n1', name: 'node-1', host: 'h1', ip: '1.1.1.1', current_master: true, master: true,
+        data: true, coordinating: false, ingest: false, es_version: '9.4.3', jvm_version: '21',
+        load_average: 0.5, available_processors: 4, cpu_percent: 12,
+        heap: { used: 10, committed: 20, used_percent: 10, max: 100 },
+        disk: { total: 100, free: 40, used_percent: 60 }, attributes: {},
+      }]),
+    })
+
+    const wrapper = mountPage(OverviewPage)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('.ds-logs-app-000001')
+    expect(wrapper.text()).toContain('DS: logs-app')
+    expect(wrapper.text()).toContain('write')
+  })
+
+  it('focuses unhealthy indices from the warning banner', async () => {
+    setConnection()
+    ;(globalThis as any).$fetch.mockResolvedValueOnce({
+      status: 200,
+      body: baseBody([{
+        name: 'idx', closed: false, special: false, backing_index: false, status: 'yellow', unhealthy: true,
+        unreplicated: false, unassigned_shard_count: 1, initializing_shard_count: 0, relocating_shard_count: 0,
+        doc_count: 10, deleted_docs: 0, size_in_bytes: 1024, total_size_in_bytes: 1024, aliases: [],
+        num_shards: 1, num_replicas: 1,
+        shards: { unassigned: [{ index: 'idx', shard: 0, primary: false, state: 'UNASSIGNED', node: null }] },
+      }]),
+    })
+
+    const wrapper = mountPage(OverviewPage)
+    await flushPromises()
+
+    const focus = wrapper.findAll('button').find((b) => b.text().includes('Focus unhealthy indices'))
+    expect(focus).toBeTruthy()
+    await focus!.trigger('click')
+    await flushPromises()
+
+    const unhealthy = wrapper.findAll('input[type="checkbox"]').find((el) => el.element.parentElement?.textContent?.includes('unhealthy only'))
+    expect(unhealthy).toBeTruthy()
+    expect((unhealthy!.element as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('keeps multi-role nodes visible when one role filter is disabled', async () => {
+    setConnection()
+    ;(globalThis as any).$fetch.mockResolvedValueOnce({
+      status: 200,
+      body: baseBody([], [{
+        id: 'n1', name: 'node-1', host: 'h1', ip: '1.1.1.1', current_master: true, master: true,
+        data: true, coordinating: false, ingest: false, es_version: '9.4.3', jvm_version: '21',
+        load_average: 0.5, available_processors: 4, cpu_percent: 12,
+        heap: { used: 10, committed: 20, used_percent: 10, max: 100 },
+        disk: { total: 100, free: 40, used_percent: 60 }, attributes: {},
+      }]),
+    })
+
+    const wrapper = mountPage(OverviewPage)
+    await flushPromises()
+
+    const masterToggle = wrapper.findAll('button').find((b) => b.text() === 'M')
+    expect(masterToggle).toBeTruthy()
+    await masterToggle!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('node-1')
   })
 })

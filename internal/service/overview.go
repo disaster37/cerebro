@@ -8,13 +8,14 @@ import (
 )
 
 type OverviewService struct {
-	raw     domain.RawAPI
-	cluster domain.ClusterAPI
-	indices domain.IndexAPI
+	raw         domain.RawAPI
+	cluster     domain.ClusterAPI
+	indices     domain.IndexAPI
+	dataStreams domain.DataStreamAPI
 }
 
-func NewOverviewService(raw domain.RawAPI, cluster domain.ClusterAPI, indices domain.IndexAPI) *OverviewService {
-	return &OverviewService{raw: raw, cluster: cluster, indices: indices}
+func NewOverviewService(raw domain.RawAPI, cluster domain.ClusterAPI, indices domain.IndexAPI, dataStreams domain.DataStreamAPI) *OverviewService {
+	return &OverviewService{raw: raw, cluster: cluster, indices: indices, dataStreams: dataStreams}
 }
 
 func (s *OverviewService) Index(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -47,7 +48,16 @@ func (s *OverviewService) Index(ctx context.Context, req domain.CerebroRequest) 
 		responses[i] = resp.Body
 	}
 
-	body, err := domain.ClusterOverview(stateResp.Body, responses[0], responses[1], responses[2], responses[3], responses[4], responses[5])
+	// Data streams are best-effort: restricted users may get 403/404 on
+	// GET /_data_stream, and /overview must still render.
+	var dataStreamsRaw json.RawMessage
+	if s.dataStreams != nil {
+		if dsResp, derr := s.dataStreams.GetDataStreams(ctx, req.Target); derr == nil && dsResp.IsSuccess() {
+			dataStreamsRaw = dsResp.Body
+		}
+	}
+
+	body, err := domain.ClusterOverview(stateResp.Body, responses[0], responses[1], responses[2], responses[3], responses[4], responses[5], dataStreamsRaw)
 	if err != nil {
 		return domain.ErrorResponse(500, err.Error()), nil
 	}
@@ -106,9 +116,10 @@ func (s *OverviewService) GetShardStats(ctx context.Context, req domain.CerebroR
 	if err != nil {
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
-	node, err := req.Get("node")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
+	node := req.GetOpt("node")
+	primary, _ := req.GetBool("primary")
+	if node == "" || node == "unassigned" {
+		return forward(s.cluster.AllocationExplain(index, shard, primary, ctx, req.Target))
 	}
 	stats, err := s.indices.GetShardStats(index, ctx, req.Target)
 	if err != nil {

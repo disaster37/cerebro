@@ -9,7 +9,17 @@
 </template>
 
 <script setup lang="ts">
+import { watch } from 'vue'
+
 const alerts = useState<any[]>('alerts', () => [])
+const route = useRoute()
+
+// Clear stale global alerts when navigating between routes so an error from a
+// previous page never leaks into the next one.
+watch(() => route.path, () => {
+  alerts.value = []
+})
+
 function dismissAlert(index: number) {
   alerts.value.splice(index, 1)
 }

@@ -12,6 +12,11 @@ export default defineNuxtConfig({
     colorMode: true,
     fonts: false,
   },
+  icon: {
+    clientBundle: {
+      scan: true,
+    },
+  },
   nitro: {
     output: {
       publicDir: 'output/public',

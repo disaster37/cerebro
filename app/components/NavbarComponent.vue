@@ -78,7 +78,7 @@ const primaryLinks = [
   { label: 'Overview', to: '/overview' },
   { label: 'Indexes', to: '/indices' },
   { label: 'Nodes', to: '/nodes' },
-  { label: 'REST', to: '/rest' },
+  { label: 'DevTools', to: '/devtools' },
   { label: 'Policies', to: '/policies' },
   { label: 'Snapshots', to: '/snapshot' },
   { label: 'Repositories', to: '/repository' },

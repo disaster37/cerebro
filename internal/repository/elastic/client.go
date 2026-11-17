@@ -136,7 +136,7 @@ func (c *Client) Nodes(flags []string, ctx context.Context, target domain.Elasti
 }
 
 func (c *Client) CloseIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	res, err := esapi.IndicesCloseRequest{Index: []string{index}}.Do(withTarget(ctx, target), c.es)
+	res, err := esapi.IndicesCloseRequest{Index: splitIndexList(index)}.Do(withTarget(ctx, target), c.es)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (c *Client) CloseIndex(index string, ctx context.Context, target domain.Ela
 }
 
 func (c *Client) OpenIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	res, err := esapi.IndicesOpenRequest{Index: []string{index}}.Do(withTarget(ctx, target), c.es)
+	res, err := esapi.IndicesOpenRequest{Index: splitIndexList(index)}.Do(withTarget(ctx, target), c.es)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func (c *Client) OpenIndex(index string, ctx context.Context, target domain.Elas
 }
 
 func (c *Client) RefreshIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	res, err := esapi.IndicesRefreshRequest{Index: []string{index}}.Do(withTarget(ctx, target), c.es)
+	res, err := esapi.IndicesRefreshRequest{Index: splitIndexList(index)}.Do(withTarget(ctx, target), c.es)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (c *Client) RefreshIndex(index string, ctx context.Context, target domain.E
 }
 
 func (c *Client) FlushIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	res, err := esapi.IndicesFlushRequest{Index: []string{index}}.Do(withTarget(ctx, target), c.es)
+	res, err := esapi.IndicesFlushRequest{Index: splitIndexList(index)}.Do(withTarget(ctx, target), c.es)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func (c *Client) FlushIndex(index string, ctx context.Context, target domain.Ela
 }
 
 func (c *Client) ForceMerge(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	res, err := esapi.IndicesForcemergeRequest{Index: []string{index}}.Do(withTarget(ctx, target), c.es)
+	res, err := esapi.IndicesForcemergeRequest{Index: splitIndexList(index)}.Do(withTarget(ctx, target), c.es)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (c *Client) ForceMerge(index string, ctx context.Context, target domain.Ela
 }
 
 func (c *Client) ClearIndexCache(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	res, err := esapi.IndicesClearCacheRequest{Index: []string{index}}.Do(withTarget(ctx, target), c.es)
+	res, err := esapi.IndicesClearCacheRequest{Index: splitIndexList(index)}.Do(withTarget(ctx, target), c.es)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,44 @@ func (c *Client) ClearIndexCache(index string, ctx context.Context, target domai
 }
 
 func (c *Client) DeleteIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	res, err := esapi.IndicesDeleteRequest{Index: []string{index}}.Do(withTarget(ctx, target), c.es)
+	res, err := esapi.IndicesDeleteRequest{Index: splitIndexList(index)}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) AllocationExplain(index string, shard int, primary bool, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	body := allocationExplainBody(index, shard, primary)
+	return c.ExecuteRequest(http.MethodPost, "/_cluster/allocation/explain", json.RawMessage(body), ctx, target)
+}
+
+func (c *Client) GetDataStreams(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.IndicesGetDataStreamRequest{}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) CreateDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.IndicesCreateDataStreamRequest{Name: name}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) DeleteDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.IndicesDeleteDataStreamRequest{Name: []string{name}}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) RolloverDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.IndicesRolloverRequest{Alias: name}.Do(withTarget(ctx, target), c.es)
 	if err != nil {
 		return nil, err
 	}
@@ -687,6 +724,25 @@ func restoreSnapshotBody(opts domain.RestoreSnapshotOptions) string {
 	}
 	body += "}"
 	return body
+}
+
+// splitIndexList splits a comma-separated index list into individual names,
+// trimming whitespace and dropping empty segments.
+func splitIndexList(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func allocationExplainBody(index string, shard int, primary bool) string {
+	return `{"index":` + jsonStr(index) +
+		`,"shard":` + strconv.Itoa(shard) +
+		`,"primary":` + strconv.FormatBool(primary) + `}`
 }
 
 // escapeIndexPattern escapes an index pattern for use as a single URL path

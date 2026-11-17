@@ -106,6 +106,11 @@ func NewServer(port int, cfg *config.Config, h *handler.Handlers) *server.Hertz 
 	srv.POST("/templates/delete", h.TemplatesDelete)
 	srv.POST("/templates/create", h.TemplatesCreate)
 
+	srv.POST("/data_streams", h.DataStreamsList)
+	srv.POST("/data_streams/create", h.DataStreamsCreate)
+	srv.POST("/data_streams/delete", h.DataStreamsDelete)
+	srv.POST("/data_streams/rollover", h.DataStreamsRollover)
+
 	srv.POST("/cluster_settings", h.ClusterSettingsGet)
 	srv.POST("/cluster_settings/save", h.ClusterSettingsSave)
 

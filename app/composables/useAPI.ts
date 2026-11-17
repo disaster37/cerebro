@@ -24,10 +24,19 @@ export function extractEnvelopeError(body: any): string {
   return extractDetailedError(body)
 }
 
+export type AlertType = 'success' | 'danger' | 'warning' | 'info'
+
 function pushUniqueAlert(alerts: any[], message: string, type: string) {
   if (!alerts.some((a) => a.message === message && a.type === type)) {
     alerts.push({ message, type })
   }
+}
+
+// pushAlert exposes action feedback (success/warning/error) to pages without
+// duplicating the global alert state plumbing.
+export function pushAlert(message: string, type: AlertType = 'info') {
+  const alerts = useState<any[]>('alerts', () => [])
+  pushUniqueAlert(alerts.value, message, type)
 }
 
 export function useAPI() {
@@ -82,6 +91,12 @@ export function useAPI() {
             'Cluster request forbidden (403 Forbidden). Verify that the connected user has sufficient cluster permissions.',
             'danger',
           )
+        } else if (data.status >= 400 && data.status < 500) {
+          pushUniqueAlert(
+            alerts.value,
+            detail ? `Cluster request rejected (${data.status}): ${detail}` : `Cluster request rejected (${data.status}).`,
+            'danger',
+          )
         } else if (data.status >= 500) {
           pushUniqueAlert(
             alerts.value,
@@ -98,5 +113,5 @@ export function useAPI() {
     }
   }
 
-  return { apiCall }
+  return { apiCall, pushAlert }
 }

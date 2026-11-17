@@ -1,3 +1,10 @@
+export interface UnassignedShardInfo {
+  reason: string
+  at?: string
+  details?: string
+  last_allocation_status?: string
+}
+
 export interface OverviewShard {
   index: string
   shard: number
@@ -5,13 +12,22 @@ export interface OverviewShard {
   state: string
   node: string | null
   relocating_node?: string | null
+  unassigned_info?: UnassignedShardInfo
 }
 
 export interface OverviewIndex {
   name: string
   closed: boolean
   special: boolean
+  backing_index: boolean
+  data_stream?: string
+  is_write_index?: boolean
+  status: 'green' | 'yellow' | 'red' | 'closed'
   unhealthy: boolean
+  unreplicated: boolean
+  unassigned_shard_count: number
+  initializing_shard_count: number
+  relocating_shard_count: number
   doc_count: number
   deleted_docs: number
   size_in_bytes: number
@@ -20,6 +36,31 @@ export interface OverviewIndex {
   num_shards: number
   num_replicas: number
   shards: Record<string, OverviewShard[]>
+}
+
+export interface DataStreamSummary {
+  name: string
+  status: string
+  generation: number
+  template: string
+  timestamp_field: string
+  write_index: string
+  backing_indices: string[]
+  doc_count: number
+  size_in_bytes: number
+  total_size_in_bytes: number
+  hidden?: boolean
+  system?: boolean
+}
+
+export interface TemplateEntry {
+  name: string
+  type: 'composable' | 'legacy'
+  patterns: string[]
+  order?: number
+  version?: number
+  data_stream?: boolean
+  template: any
 }
 
 export interface OverviewNode {
@@ -57,6 +98,7 @@ export interface OverviewData {
   closed_indices: number
   special_indices: number
   indices: OverviewIndex[]
+  data_streams: DataStreamSummary[]
   nodes: OverviewNode[]
   shard_allocation: boolean
 }

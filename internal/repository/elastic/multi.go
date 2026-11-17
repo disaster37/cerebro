@@ -57,6 +57,11 @@ func NewMultiClient(gzip bool) (*MultiClient, error) {
 	// This replaces the cloned default transport built inside New() (its TLS /
 	// idle-conn settings are discarded; tt owns all outbound policy).
 	osc.RestyClient().SetTransport(tt)
+	// opensearch.New installs a client-wide Content-Type: application/json
+	// header. Bodyless POST/DELETE/GET requests must not send it (matching
+	// esapi behavior), so clear it and set it per-request in osClient.do only
+	// when a body is present.
+	delete(osc.RestyClient().Header, "Content-Type")
 	// resty drops request bodies on GET/HEAD by default; the ES engine sends
 	// GET-with-body via http.NewRequestWithContext (e.g. GET _search with a
 	// body), so enable GET payloads for parity.
@@ -235,6 +240,26 @@ func (m *MultiClient) ClearIndexCache(index string, ctx context.Context, target 
 
 func (m *MultiClient) DeleteIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).DeleteIndex(index, ctx, target)
+}
+
+func (m *MultiClient) AllocationExplain(index string, shard int, primary bool, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).AllocationExplain(index, shard, primary, ctx, target)
+}
+
+func (m *MultiClient) GetDataStreams(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).GetDataStreams(ctx, target)
+}
+
+func (m *MultiClient) CreateDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).CreateDataStream(name, ctx, target)
+}
+
+func (m *MultiClient) DeleteDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).DeleteDataStream(name, ctx, target)
+}
+
+func (m *MultiClient) RolloverDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).RolloverDataStream(name, ctx, target)
 }
 
 func (m *MultiClient) GetIndexSettings(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {

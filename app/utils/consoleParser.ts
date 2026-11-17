@@ -31,7 +31,9 @@ function splitLines(doc: string): LineInfo[] {
   let start = 0
   for (let i = 0; i <= doc.length; i++) {
     if (i === doc.length || doc[i] === '\n') {
-      lines.push({ text: doc.slice(start, i), start, end: i })
+      // Strip a trailing CR from the line text only; start/end stay exact
+      // offsets into the original document (CRLF-safe).
+      lines.push({ text: doc.slice(start, i).replace(/\r$/, ''), start, end: i })
       start = i + 1
     }
   }
@@ -101,14 +103,18 @@ export function parseConsoleDocument(doc: string): ParsedConsoleRequest[] {
       const bodyLines: LineInfo[] = []
       while (j < lines.length) {
         const next = lines[j]!
-        if (next.text.trim() === '' || COMMENT_RE.test(next.text) || HEADER_RE.test(next.text)) break
+        if (next.text.trim() === '' || HEADER_RE.test(next.text)) break
+        if (COMMENT_RE.test(next.text)) {
+          j++
+          continue
+        }
         bodyLines.push(next)
         j++
       }
       if (bodyLines.length) {
         bodyFrom = bodyLines[0]!.start
         bodyTo = bodyLines[bodyLines.length - 1]!.end
-        rawBody = doc.slice(bodyFrom, bodyTo)
+        rawBody = bodyLines.map((line) => line.text).join('\n')
       }
     } else {
       let depth = 0
@@ -117,13 +123,21 @@ export function parseConsoleDocument(doc: string): ParsedConsoleRequest[] {
       while (j < lines.length) {
         const next = lines[j]!
         if (!started) {
-          if (next.text.trim() === '' || COMMENT_RE.test(next.text)) break
+          if (next.text.trim() === '') break
+          if (COMMENT_RE.test(next.text)) {
+            j++
+            continue
+          }
           if (HEADER_RE.test(next.text)) break
           const trimmed = next.text.trim()
           if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) break
           started = true
         } else if (HEADER_RE.test(next.text) && depth === 0) {
           break
+        }
+        if (COMMENT_RE.test(next.text)) {
+          j++
+          continue
         }
         bodyLines.push(next)
         depth = updateDepth(next.text, depth)
@@ -133,7 +147,7 @@ export function parseConsoleDocument(doc: string): ParsedConsoleRequest[] {
       if (bodyLines.length) {
         bodyFrom = bodyLines[0]!.start
         bodyTo = bodyLines[bodyLines.length - 1]!.end
-        rawBody = doc.slice(bodyFrom, bodyTo)
+        rawBody = bodyLines.map((line) => line.text).join('\n')
       }
     }
 

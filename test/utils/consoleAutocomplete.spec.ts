@@ -73,3 +73,45 @@ describe('consoleAutocomplete', () => {
     expect(labels(result)).toContain('match')
   })
 })
+
+describe('consoleAutocomplete triggers', () => {
+  it('suggests query DSL keys inside a multi-line JSON body', () => {
+    const source = createConsoleCompletionSource(ref(meta()))
+    const doc = 'GET logs-2024/_search\n{\n  "query": {\n    "'
+    const result = source(contextFor(doc))
+    expect(labels(result)).toContain('bool')
+    expect(labels(result)).toContain('match')
+  })
+
+  it('suggests query params after ? and &', () => {
+    const source = createConsoleCompletionSource(ref(meta()))
+    expect(labels(source(contextFor('GET logs-2024/_search?pre')))).toContain('pretty')
+    expect(labels(source(contextFor('GET logs-2024/_search?pretty&h')))).toContain('h=')
+  })
+
+  it('suggests indices and global endpoints right after the method and space', () => {
+    const source = createConsoleCompletionSource(ref(meta()))
+    const result = source(contextFor('GET '))
+    expect(labels(result)).toContain('logs-2024')
+    expect(labels(result)).toContain('_cluster/health')
+  })
+
+  it('suggests index endpoints after a slash', () => {
+    const source = createConsoleCompletionSource(ref(meta()))
+    const result = source(contextFor('GET logs-2024/'))
+    expect(labels(result)).toContain('_search')
+    expect(labels(result)).toContain('_mapping')
+  })
+
+  it('supports leading-slash paths', () => {
+    const source = createConsoleCompletionSource(ref(meta()))
+    const result = source(contextFor('GET /logs-2024/_sea'))
+    expect(labels(result)).toContain('_search')
+  })
+
+  it('suggests data stream endpoints', () => {
+    const source = createConsoleCompletionSource(ref(meta()))
+    const result = source(contextFor('GET _data'))
+    expect(labels(result)).toContain('_data_stream')
+  })
+})

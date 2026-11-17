@@ -116,3 +116,25 @@ describe('NavbarComponent', () => {
     expect((globalThis as any).navigateTo).toHaveBeenCalledWith('/login')
   })
 })
+
+describe('NavbarComponent DevTools', () => {
+  beforeEach(() => {
+    resetTestStubs()
+    vi.clearAllMocks()
+    ;(globalThis as any).$fetch.mockReset()
+  })
+
+  it('labels the console nav item DevTools and links to /devtools', async () => {
+    stubAuthMe({ authEnabled: false })
+    setConnection('')
+    ;(globalThis as any).useState('clusterName').value = 'prod'
+
+    const wrapper = mountNavbar()
+    await flushPromises()
+
+    const items = (wrapper.vm as any).navItems as any[]
+    const flat = items.flatMap((item) => item.children ? item.children : [item])
+    expect(flat.some((item) => item.label === 'DevTools' && item.to === '/devtools')).toBe(true)
+    expect(flat.some((item) => item.label === 'REST')).toBe(false)
+  })
+})

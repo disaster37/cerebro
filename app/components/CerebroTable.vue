@@ -35,6 +35,7 @@
       :columns="columns"
       :loading="loading"
       :empty="emptyText || 'No rows found.'"
+      :row-key="rowKey"
       @select="onSelect"
     >
       <template v-for="name in cellSlots" #[name]="slotProps">

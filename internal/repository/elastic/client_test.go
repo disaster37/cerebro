@@ -586,3 +586,154 @@ func TestESEngineClusterStateMetricsPath(t *testing.T) {
 		t.Errorf("path = %q, want master_node metrics", rec.path)
 	}
 }
+
+func TestOSEngineBodylessRequestsHaveNoContentType(t *testing.T) {
+	var rec recordedRequest
+	srv := newFakeOS(t, &rec)
+	defer srv.Close()
+
+	m, err := NewMultiClient(false)
+	if err != nil {
+		t.Fatalf("NewMultiClient: %v", err)
+	}
+	os := m.os
+	target := targetFor(srv, "")
+	ctx := context.Background()
+
+	cases := []struct {
+		name   string
+		call   func() (*domain.Response, error)
+		method string
+		path   string
+	}{
+		{"Flush", func() (*domain.Response, error) { return os.FlushIndex("idx", ctx, target) }, "POST", "/idx/_flush"},
+		{"Refresh", func() (*domain.Response, error) { return os.RefreshIndex("idx", ctx, target) }, "POST", "/idx/_refresh"},
+		{"Open", func() (*domain.Response, error) { return os.OpenIndex("idx", ctx, target) }, "POST", "/idx/_open"},
+		{"Close", func() (*domain.Response, error) { return os.CloseIndex("idx", ctx, target) }, "POST", "/idx/_close"},
+		{"ForceMerge", func() (*domain.Response, error) { return os.ForceMerge("idx", ctx, target) }, "POST", "/idx/_forcemerge"},
+		{"ClearCache", func() (*domain.Response, error) { return os.ClearIndexCache("idx", ctx, target) }, "POST", "/idx/_cache/clear"},
+		{"Delete", func() (*domain.Response, error) { return os.DeleteIndex("idx", ctx, target) }, "DELETE", "/idx"},
+		{"GetDataStreams", func() (*domain.Response, error) { return os.GetDataStreams(ctx, target) }, "GET", "/_data_stream"},
+		{"CreateDataStream", func() (*domain.Response, error) { return os.CreateDataStream("logs-app", ctx, target) }, "PUT", "/_data_stream/logs-app"},
+		{"DeleteDataStream", func() (*domain.Response, error) { return os.DeleteDataStream("logs-app", ctx, target) }, "DELETE", "/_data_stream/logs-app"},
+		{"RolloverDataStream", func() (*domain.Response, error) { return os.RolloverDataStream("logs-app", ctx, target) }, "POST", "/logs-app/_rollover"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec = recordedRequest{}
+			if _, err := tc.call(); err != nil {
+				t.Fatalf("call: %v", err)
+			}
+			if rec.method != tc.method || rec.path != tc.path {
+				t.Errorf("request = %s %s, want %s %s", rec.method, rec.path, tc.method, tc.path)
+			}
+			if rec.contentType != "" {
+				t.Errorf("content-type = %q, want empty for bodyless request", rec.contentType)
+			}
+		})
+	}
+}
+
+func TestOSEngineCommaSeparatedIndexActions(t *testing.T) {
+	var rec recordedRequest
+	srv := newFakeOS(t, &rec)
+	defer srv.Close()
+
+	m, err := NewMultiClient(false)
+	if err != nil {
+		t.Fatalf("NewMultiClient: %v", err)
+	}
+	os := m.os
+	target := targetFor(srv, "")
+	ctx := context.Background()
+
+	cases := []struct {
+		name   string
+		call   func() (*domain.Response, error)
+		method string
+		path   string
+	}{
+		{"Flush", func() (*domain.Response, error) { return os.FlushIndex("idx1, idx2", ctx, target) }, "POST", "/idx1,idx2/_flush"},
+		{"Refresh", func() (*domain.Response, error) { return os.RefreshIndex("idx1,idx2", ctx, target) }, "POST", "/idx1,idx2/_refresh"},
+		{"Open", func() (*domain.Response, error) { return os.OpenIndex("idx1,idx2", ctx, target) }, "POST", "/idx1,idx2/_open"},
+		{"Close", func() (*domain.Response, error) { return os.CloseIndex("idx1,idx2", ctx, target) }, "POST", "/idx1,idx2/_close"},
+		{"ForceMerge", func() (*domain.Response, error) { return os.ForceMerge("idx1,idx2", ctx, target) }, "POST", "/idx1,idx2/_forcemerge"},
+		{"ClearCache", func() (*domain.Response, error) { return os.ClearIndexCache("idx1,idx2", ctx, target) }, "POST", "/idx1,idx2/_cache/clear"},
+		{"Delete", func() (*domain.Response, error) { return os.DeleteIndex("idx1,idx2", ctx, target) }, "DELETE", "/idx1,idx2"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec = recordedRequest{}
+			if _, err := tc.call(); err != nil {
+				t.Fatalf("call: %v", err)
+			}
+			if rec.method != tc.method || rec.path != tc.path {
+				t.Errorf("request = %s %s, want %s %s", rec.method, rec.path, tc.method, tc.path)
+			}
+		})
+	}
+}
+
+func TestOSEngineAllocationExplain(t *testing.T) {
+	var rec recordedRequest
+	srv := newFakeOS(t, &rec)
+	defer srv.Close()
+
+	m, err := NewMultiClient(false)
+	if err != nil {
+		t.Fatalf("NewMultiClient: %v", err)
+	}
+	if _, err := m.os.AllocationExplain("idx", 0, true, context.Background(), targetFor(srv, "")); err != nil {
+		t.Fatalf("AllocationExplain: %v", err)
+	}
+	if rec.method != "POST" || rec.path != "/_cluster/allocation/explain" {
+		t.Errorf("request = %s %s", rec.method, rec.path)
+	}
+	if rec.contentType != "application/json" {
+		t.Errorf("content-type = %q, want application/json", rec.contentType)
+	}
+	for _, want := range []string{`"index":"idx"`, `"shard":0`, `"primary":true`} {
+		if !strings.Contains(rec.body, want) {
+			t.Errorf("body = %q, want to contain %q", rec.body, want)
+		}
+	}
+}
+
+func TestESEngineNewEndpointPaths(t *testing.T) {
+	var rec recordedRequest
+	srv := newFakeES(t, &rec)
+	defer srv.Close()
+
+	c, err := NewClient(false)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	target := targetFor(srv, "")
+	ctx := context.Background()
+
+	cases := []struct {
+		name   string
+		call   func() (*domain.Response, error)
+		method string
+		path   string
+	}{
+		{"FlushComma", func() (*domain.Response, error) { return c.FlushIndex("idx1,idx2", ctx, target) }, "POST", "/idx1,idx2/_flush"},
+		{"DeleteComma", func() (*domain.Response, error) { return c.DeleteIndex("idx1,idx2", ctx, target) }, "DELETE", "/idx1,idx2"},
+		{"GetDataStreams", func() (*domain.Response, error) { return c.GetDataStreams(ctx, target) }, "GET", "/_data_stream"},
+		{"CreateDataStream", func() (*domain.Response, error) { return c.CreateDataStream("logs-app", ctx, target) }, "PUT", "/_data_stream/logs-app"},
+		{"DeleteDataStream", func() (*domain.Response, error) { return c.DeleteDataStream("logs-app", ctx, target) }, "DELETE", "/_data_stream/logs-app"},
+		{"RolloverDataStream", func() (*domain.Response, error) { return c.RolloverDataStream("logs-app", ctx, target) }, "POST", "/logs-app/_rollover"},
+		{"AllocationExplain", func() (*domain.Response, error) { return c.AllocationExplain("idx", 0, false, ctx, target) }, "POST", "/_cluster/allocation/explain"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec = recordedRequest{}
+			if _, err := tc.call(); err != nil {
+				t.Fatalf("call: %v", err)
+			}
+			if rec.method != tc.method || rec.path != tc.path {
+				t.Errorf("request = %s %s, want %s %s", rec.method, rec.path, tc.method, tc.path)
+			}
+		})
+	}
+}

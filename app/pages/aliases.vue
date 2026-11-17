@@ -115,7 +115,7 @@ async function load() {
     return
   }
   loading.value = true
-  const resp = await apiCall('POST', '/aliases/get_aliases', { host: clusterHost.value })
+  const resp = await apiCall('POST', '/aliases/get_aliases', { host: clusterHost.value }, { suppressErrorAlert: true })
   if (resp?.status === 200) {
     aliases.value = resp.body || []
     error.value = ''

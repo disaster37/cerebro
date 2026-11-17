@@ -64,6 +64,10 @@ func runAcceptanceSuite(t *testing.T, url string, wantFlavor elastic.Flavor, wan
 	_, _ = client.DeleteIndex("cerebro-acceptance", ctx, target)
 	_, _ = client.DeleteIndex("restored-cerebro-acceptance", ctx, target)
 	_, _ = client.DeleteRepository("cerebro-acceptance-repo", ctx, target)
+	_, _ = client.DeleteDataStream("cerebro-acceptance-ds", ctx, target)
+	_, _ = client.DeleteComposableTemplate("cerebro-acceptance-ds-ds-template", ctx, target)
+	_, _ = client.DeleteComposableTemplate("cerebro-acceptance-template", ctx, target)
+	_, _ = client.DeleteTemplate("cerebro-acceptance-legacy", ctx, target)
 
 	t.Run("Main_detects_flavor_and_version", func(t *testing.T) {
 		resp, err := client.Main(ctx, target)
@@ -216,12 +220,167 @@ func runAcceptanceSuite(t *testing.T, url string, wantFlavor elastic.Flavor, wan
 		}
 	})
 
+	t.Run("Index_actions_lifecycle", func(t *testing.T) {
+		actions := []struct {
+			name string
+			call func() (*domain.Response, error)
+		}{
+			{"RefreshIndex", func() (*domain.Response, error) { return client.RefreshIndex("cerebro-acceptance", ctx, target) }},
+			{"FlushIndex", func() (*domain.Response, error) { return client.FlushIndex("cerebro-acceptance", ctx, target) }},
+			{"ClearIndexCache", func() (*domain.Response, error) { return client.ClearIndexCache("cerebro-acceptance", ctx, target) }},
+			{"ForceMerge", func() (*domain.Response, error) { return client.ForceMerge("cerebro-acceptance", ctx, target) }},
+			{"CloseIndex", func() (*domain.Response, error) { return client.CloseIndex("cerebro-acceptance", ctx, target) }},
+			{"OpenIndex", func() (*domain.Response, error) { return client.OpenIndex("cerebro-acceptance", ctx, target) }},
+		}
+		for _, action := range actions {
+			resp, err := action.call()
+			if err != nil {
+				t.Fatalf("%s: %v", action.name, err)
+			}
+			if resp.Status != 200 {
+				t.Fatalf("%s status = %d, want 200: %s", action.name, resp.Status, resp.Body)
+			}
+		}
+	})
+
+	t.Run("Templates_composable_and_legacy", func(t *testing.T) {
+		composableName := "cerebro-acceptance-template"
+		legacyName := "cerebro-acceptance-legacy"
+		composableBody := json.RawMessage(`{"index_patterns":["cerebro-acceptance-*"],"priority":100,"template":{"settings":{"number_of_shards":1}}}`)
+		legacyBody := json.RawMessage(`{"index_patterns":["cerebro-legacy-*"],"order":1,"settings":{}}`)
+
+		createComposable, err := client.CreateComposableTemplate(composableName, composableBody, ctx, target)
+		if err != nil {
+			t.Fatalf("CreateComposableTemplate: %v", err)
+		}
+		if createComposable.Status != 200 {
+			t.Fatalf("composable create status = %d: %s", createComposable.Status, createComposable.Body)
+		}
+		defer func() { _, _ = client.DeleteComposableTemplate(composableName, ctx, target) }()
+
+		createLegacy, err := client.CreateTemplate(legacyName, legacyBody, ctx, target)
+		if err != nil {
+			t.Fatalf("CreateTemplate: %v", err)
+		}
+		if createLegacy.Status != 200 {
+			t.Fatalf("legacy create status = %d: %s", createLegacy.Status, createLegacy.Body)
+		}
+		defer func() { _, _ = client.DeleteTemplate(legacyName, ctx, target) }()
+
+		templates := service.NewTemplatesService(client)
+		resp, err := templates.Templates(ctx, domain.CerebroRequest{Target: target})
+		if err != nil {
+			t.Fatalf("Templates: %v", err)
+		}
+		if resp.Status != 200 {
+			t.Fatalf("templates status = %d, want 200: %s", resp.Status, resp.Body)
+		}
+		var entries []domain.TemplateEntry
+		if err := json.Unmarshal(resp.Body, &entries); err != nil {
+			t.Fatalf("unmarshal templates: %v", err)
+		}
+		found := map[string]bool{}
+		for _, entry := range entries {
+			found[entry.Name] = true
+		}
+		if !found[composableName] || !found[legacyName] {
+			t.Errorf("templates = %v, want both %s and %s", found, composableName, legacyName)
+		}
+	})
+
+	t.Run("DataStreams_create_overview_rollover_delete", func(t *testing.T) {
+		dsName := "cerebro-acceptance-ds"
+		templateName := dsName + "-ds-template"
+		dsSvc := service.NewDataStreamsService(client, client)
+
+		createReq := domain.CerebroRequest{
+			Target: target,
+			Body:   json.RawMessage(`{"name":"` + dsName + `","createTemplate":true}`),
+		}
+		createResp, err := dsSvc.Create(ctx, createReq)
+		if err != nil {
+			t.Fatalf("DataStreams.Create: %v", err)
+		}
+		if createResp.Status != 200 {
+			t.Fatalf("create data stream status = %d: %s", createResp.Status, createResp.Body)
+		}
+		defer func() {
+			_, _ = client.DeleteDataStream(dsName, ctx, target)
+			_, _ = client.DeleteComposableTemplate(templateName, ctx, target)
+		}()
+
+		doc := json.RawMessage(`{"@timestamp":"2024-01-01T00:00:00Z","message":"hello"}`)
+		indexResp, err := client.ExecuteRequest("POST", "/"+dsName+"/_doc", doc, ctx, target)
+		if err != nil {
+			t.Fatalf("index doc: %v", err)
+		}
+		if indexResp.Status != 200 && indexResp.Status != 201 {
+			t.Fatalf("index doc status = %d: %s", indexResp.Status, indexResp.Body)
+		}
+		if _, err := client.RefreshIndex(dsName, ctx, target); err != nil {
+			t.Fatalf("RefreshIndex data stream: %v", err)
+		}
+
+		overview := service.NewOverviewService(client, client, client, client)
+		overviewResp, err := overview.Index(ctx, domain.CerebroRequest{Target: target})
+		if err != nil {
+			t.Fatalf("Overview.Index: %v", err)
+		}
+		if overviewResp.Status != 200 {
+			t.Fatalf("overview status = %d: %s", overviewResp.Status, overviewResp.Body)
+		}
+		var body struct {
+			DataStreams []domain.DataStreamSummary `json:"data_streams"`
+			Indices     []domain.OverviewIndex     `json:"indices"`
+		}
+		if err := json.Unmarshal(overviewResp.Body, &body); err != nil {
+			t.Fatalf("unmarshal overview: %v", err)
+		}
+		foundStream := false
+		for _, ds := range body.DataStreams {
+			if ds.Name == dsName {
+				foundStream = true
+			}
+		}
+		if !foundStream {
+			t.Errorf("data_streams = %+v, want %s", body.DataStreams, dsName)
+		}
+		foundBacking := false
+		for _, idx := range body.Indices {
+			if idx.DataStream == dsName {
+				foundBacking = true
+				if !idx.BackingIndex || !idx.IsWriteIndex || idx.Special {
+					t.Errorf("backing index = %+v, want backing/write/non-special", idx)
+				}
+			}
+		}
+		if !foundBacking {
+			t.Errorf("no backing index for data stream %s in overview", dsName)
+		}
+
+		rolloverResp, err := dsSvc.Rollover(ctx, domain.CerebroRequest{Target: target, Body: json.RawMessage(`{"name":"` + dsName + `"}`)})
+		if err != nil {
+			t.Fatalf("DataStreams.Rollover: %v", err)
+		}
+		if rolloverResp.Status != 200 {
+			t.Fatalf("rollover status = %d: %s", rolloverResp.Status, rolloverResp.Body)
+		}
+
+		deleteResp, err := dsSvc.Delete(ctx, domain.CerebroRequest{Target: target, Body: json.RawMessage(`{"name":"` + dsName + `"}`)})
+		if err != nil {
+			t.Fatalf("DataStreams.Delete: %v", err)
+		}
+		if deleteResp.Status != 200 {
+			t.Fatalf("delete status = %d: %s", deleteResp.Status, deleteResp.Body)
+		}
+	})
+
 	t.Run("Overview_docs_size_and_master", func(t *testing.T) {
 		// The bulk doc must be refreshed before _stats reports it.
 		if _, err := client.RefreshIndex("cerebro-acceptance", ctx, target); err != nil {
 			t.Fatalf("RefreshIndex: %v", err)
 		}
-		overview := service.NewOverviewService(client, client, client)
+		overview := service.NewOverviewService(client, client, client, client)
 		resp, err := overview.Index(ctx, domain.CerebroRequest{Target: target})
 		if err != nil {
 			t.Fatalf("Overview.Index: %v", err)
@@ -363,6 +522,25 @@ func runAcceptanceSuite(t *testing.T, url string, wantFlavor elastic.Flavor, wan
 			t.Fatalf("create snapshot status = %d: %s", create.Status, create.Body)
 		}
 		waitForSnapshot(t, client, repoName, snapName, ctx, target)
+
+		repos := service.NewRepositoriesService(client)
+		verifyResp, err := repos.Verify(ctx, domain.CerebroRequest{
+			Target: target,
+			Body:   json.RawMessage(`{"name":"` + repoName + `"}`),
+		})
+		if err != nil {
+			t.Fatalf("Repositories.Verify after snapshot: %v", err)
+		}
+		if verifyResp.Status != 200 {
+			t.Fatalf("verify status = %d: %s", verifyResp.Status, verifyResp.Body)
+		}
+		var verifyStatus domain.RepositoryVerifyStatus
+		if err := json.Unmarshal(verifyResp.Body, &verifyStatus); err != nil {
+			t.Fatalf("unmarshal verify: %v", err)
+		}
+		if !verifyStatus.SizeComputed || verifyStatus.SizeInBytes == nil || *verifyStatus.SizeInBytes <= 0 {
+			t.Errorf("verify size = %+v, want computed non-zero size", verifyStatus)
+		}
 
 		restore, err := client.RestoreSnapshot(repoName, snapName, domain.RestoreSnapshotOptions{
 			Indices:           "cerebro-acceptance",
