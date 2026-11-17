@@ -244,7 +244,7 @@ describe('overview shard health', () => {
     ;(globalThis as any).$fetch.mockResolvedValueOnce({
       status: 200,
       body: baseBody([{
-        name: '.ds-logs-app-000001', closed: false, special: true, backing_index: true,
+        name: '.ds-logs-app-000001', closed: false, special: false, backing_index: true,
         data_stream: 'logs-app', is_write_index: true, status: 'green', unhealthy: false,
         unreplicated: false, unassigned_shard_count: 0, initializing_shard_count: 0, relocating_shard_count: 0,
         doc_count: 10, deleted_docs: 0, size_in_bytes: 1024, total_size_in_bytes: 1024, aliases: [],

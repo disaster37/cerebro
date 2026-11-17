@@ -296,7 +296,7 @@ const stats = computed(() => {
 const filteredIndices = computed(() => {
   let indices = data.value?.indices || []
   if (!showClosed.value) indices = indices.filter((i) => !i.closed)
-  if (!showSpecial.value) indices = indices.filter((i) => !i.special || (showBacking.value && i.backing_index))
+  if (!showSpecial.value) indices = indices.filter((i) => !i.special)
   if (!showBacking.value) indices = indices.filter((i) => !i.backing_index)
   if (healthFilter.value === 'healthy') indices = indices.filter((i) => !i.unhealthy)
   if (healthFilter.value === 'unhealthy') indices = indices.filter((i) => i.unhealthy)
@@ -542,7 +542,11 @@ async function load() {
       ? `Failed to load indices (${overviewResp?.status || 'network error'}): ${detail}`
       : `Failed to load indices (${overviewResp?.status || 'network error'}).`
   }
-  dataStreams.value = streamsResp?.status === 200 && Array.isArray(streamsResp.body) ? streamsResp.body : []
+  // Prefer the overview's data_streams (which carry aggregated doc/size stats
+  // from backing indices); fall back to the raw /data_streams list when the
+  // overview request failed.
+  dataStreams.value = data.value?.data_streams
+    || (streamsResp?.status === 200 && Array.isArray(streamsResp.body) ? streamsResp.body : [])
   loading.value = false
 }
 

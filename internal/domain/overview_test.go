@@ -178,6 +178,40 @@ func TestClusterOverviewIndexHealthAndUnreplicated(t *testing.T) {
 	}
 }
 
+func TestClusterOverviewRelocatingPrimaryIsYellowNotRed(t *testing.T) {
+	state := json.RawMessage(`{
+		"cluster_manager_node": "n1",
+		"routing_table": {"indices": {
+			"relocating-idx": {"shards": {
+				"0": [
+					{"index":"relocating-idx","shard":0,"primary":true,"state":"RELOCATING","node":"n1","relocating_node":"n2"}
+				]
+			}}
+		}},
+		"blocks": {"indices": {}}
+	}`)
+	body, err := ClusterOverview(state, json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), nil)
+	if err != nil {
+		t.Fatalf("ClusterOverview: %v", err)
+	}
+	var out struct {
+		Indices []OverviewIndex `json:"indices"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Indices) != 1 {
+		t.Fatalf("indices = %d, want 1", len(out.Indices))
+	}
+	idx := out.Indices[0]
+	if idx.Status != "yellow" {
+		t.Errorf("relocating primary status = %q, want yellow (primary still active on source node)", idx.Status)
+	}
+	if !idx.Unhealthy || idx.RelocatingShardCount != 1 {
+		t.Errorf("relocating index = %+v, want unhealthy with 1 relocating shard", idx)
+	}
+}
+
 func TestClusterOverviewDataStreamBackingIndex(t *testing.T) {
 	state := json.RawMessage(`{
 		"cluster_manager_node": "n1",

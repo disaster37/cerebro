@@ -295,7 +295,10 @@ func overviewIndexEntry(name string, shardsRaw json.RawMessage, stats indexStatP
 			}
 			if shard.State != "STARTED" {
 				unhealthy = true
-				if shard.Primary {
+				// A primary is only "down" (red) when it is not active: UNASSIGNED
+				// or INITIALIZING. A RELOCATING primary is still serving on its
+				// source node, so it must not turn the index red.
+				if shard.Primary && (shard.State == "UNASSIGNED" || shard.State == "INITIALIZING") {
 					primaryDown = true
 				}
 			}

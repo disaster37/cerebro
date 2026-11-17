@@ -147,8 +147,9 @@ describe('indices page', () => {
       ...overviewBody,
       indices: [
         ...overviewBody.indices,
-        { name: '.ds-logs-app-000001', closed: false, special: true, backing_index: true, data_stream: 'logs-app', is_write_index: true, status: 'green', unhealthy: false, unreplicated: false, unassigned_shard_count: 0, initializing_shard_count: 0, relocating_shard_count: 0, doc_count: 10, deleted_docs: 0, size_in_bytes: 100, total_size_in_bytes: 100, aliases: [], num_shards: 1, num_replicas: 0, shards: {} },
+        { name: '.ds-logs-app-000001', closed: false, special: false, backing_index: true, data_stream: 'logs-app', is_write_index: true, status: 'green', unhealthy: false, unreplicated: false, unassigned_shard_count: 0, initializing_shard_count: 0, relocating_shard_count: 0, doc_count: 10, deleted_docs: 0, size_in_bytes: 100, total_size_in_bytes: 100, aliases: [], num_shards: 1, num_replicas: 0, shards: {} },
       ],
+      data_streams: dataStreams,
     }
     mockLoad(overview, dataStreams)
 

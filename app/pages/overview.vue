@@ -363,7 +363,7 @@ const specialLabel = computed(() => {
 const filteredIndices = computed(() => {
   let indices = data.value?.indices || []
   if (!showClosed.value) indices = indices.filter((i) => !i.closed)
-  if (!showSpecial.value) indices = indices.filter((i) => !i.special || (showBacking.value && i.backing_index))
+  if (!showSpecial.value) indices = indices.filter((i) => !i.special)
   if (!showBacking.value) indices = indices.filter((i) => !i.backing_index)
   if (unhealthyOnly.value) indices = indices.filter((i) => i.unhealthy)
   if (dataStreamFilter.value) indices = indices.filter((i) => i.data_stream === dataStreamFilter.value)
