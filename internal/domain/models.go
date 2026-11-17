@@ -23,10 +23,12 @@ type BackendInfo struct {
 	Version string `json:"backendVersion"` // e.g. "9.4.3" / "3.4.0"; may be ""
 }
 
-// ElasticServer is a target cluster plus forwarded (whitelisted) headers.
+// ElasticServer is a target cluster plus per-request connection options and
+// forwarded (whitelisted) headers.
 type ElasticServer struct {
-	Host    Host
-	Headers []KeyValue
+	Host             Host
+	Headers          []KeyValue
+	TrustCertificate bool
 }
 
 // KeyValue is a generic header pair.

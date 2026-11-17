@@ -6,7 +6,11 @@
 </template>
 
 <script setup lang="ts">
-const clusterName = useState<string>('clusterName')
+import { onMounted, ref } from 'vue'
+import { useAPI } from '../composables/useAPI'
+import { useCluster } from '../composables/useCluster'
+
+const { clusterHost } = useCluster()
 const { apiCall } = useAPI()
 const repos = ref<any[]>([])
 
@@ -16,7 +20,7 @@ const reposColumns = [
 ]
 
 onMounted(async () => {
-  const resp = await apiCall('POST', '/repositories', { host: clusterName.value })
+  const resp = await apiCall('POST', '/repositories', { host: clusterHost.value })
   if (resp?.status === 200) repos.value = resp.body || []
 })
 </script>

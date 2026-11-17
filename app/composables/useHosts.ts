@@ -1,3 +1,6 @@
+import { ref } from 'vue'
+import { useAPI } from './useAPI'
+
 export function useHosts() {
   const { apiCall } = useAPI()
   const hosts = ref<string[]>([])

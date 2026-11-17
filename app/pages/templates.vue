@@ -10,7 +10,11 @@
 </template>
 
 <script setup lang="ts">
-const clusterName = useState<string>('clusterName')
+import { onMounted, ref } from 'vue'
+import { useAPI } from '../composables/useAPI'
+import { useCluster } from '../composables/useCluster'
+
+const { clusterHost } = useCluster()
 const { apiCall } = useAPI()
 const templates = ref<any[]>([])
 
@@ -22,13 +26,13 @@ const templatesColumns = [
 ]
 
 onMounted(async () => {
-  const resp = await apiCall('POST', '/templates', { host: clusterName.value })
+  const resp = await apiCall('POST', '/templates', { host: clusterHost.value })
   if (resp?.status === 200) templates.value = resp.body || []
 })
 
 async function del(name: string) {
-  await apiCall('POST', '/templates/delete', { host: clusterName.value, name })
-  const resp = await apiCall('POST', '/templates', { host: clusterName.value })
+  await apiCall('POST', '/templates/delete', { host: clusterHost.value, name })
+  const resp = await apiCall('POST', '/templates', { host: clusterHost.value })
   if (resp?.status === 200) templates.value = resp.body || []
 }
 </script>

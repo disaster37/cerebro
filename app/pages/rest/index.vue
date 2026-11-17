@@ -38,7 +38,11 @@
 </template>
 
 <script setup lang="ts">
-const clusterName = useState<string>('clusterName')
+import { onMounted, ref } from 'vue'
+import { useAPI } from '../../composables/useAPI'
+import { useCluster } from '../../composables/useCluster'
+
+const { clusterHost } = useCluster()
 const { apiCall } = useAPI()
 const method = ref('GET')
 const path = ref('_cat/indices')
@@ -57,16 +61,16 @@ const historyColumns = [
 onMounted(() => loadHistory())
 
 async function loadIndices() {
-  await apiCall('POST', '/rest', { host: clusterName.value })
+  await apiCall('POST', '/rest', { host: clusterHost.value })
 }
 
 async function execute() {
   const resp = await apiCall('POST', '/rest/request', {
-    host: clusterName.value,
+    host: clusterHost.value,
     method: method.value,
     path: path.value,
     data: body.value || undefined,
-  })
+  }, { suppressErrorAlert: true })
   if (resp) {
     result.value = resp.body
     resultStatus.value = resp.status
@@ -75,7 +79,7 @@ async function execute() {
 }
 
 async function loadHistory() {
-  const resp = await apiCall('POST', '/rest/history', { host: clusterName.value })
+  const resp = await apiCall('POST', '/rest/history', { host: clusterHost.value })
   if (resp?.status === 200) history.value = resp.body || []
 }
 

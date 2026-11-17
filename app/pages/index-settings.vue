@@ -18,13 +18,17 @@
 </template>
 
 <script setup lang="ts">
-const clusterName = useState<string>('clusterName')
+import { ref } from 'vue'
+import { useAPI } from '../composables/useAPI'
+import { useCluster } from '../composables/useCluster'
+
+const { clusterHost } = useCluster()
 const { apiCall } = useAPI()
 const index = ref('')
 const idxSettings = ref<any>(null)
 
 async function load() {
-  const resp = await apiCall('POST', '/index_settings', { host: clusterName.value, index: index.value })
+  const resp = await apiCall('POST', '/index_settings', { host: clusterHost.value, index: index.value })
   if (resp?.status === 200) idxSettings.value = resp.body
 }
 </script>

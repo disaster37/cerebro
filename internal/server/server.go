@@ -37,6 +37,7 @@ func NewServer(port int, cfg *config.Config, h *handler.Handlers) *server.Hertz 
 	srv.GET("/connect/hosts", h.ConnectIndex)
 	srv.POST("/auth/login", h.AuthLogin)
 	srv.POST("/auth/logout", h.AuthLogout)
+	srv.GET("/auth/me", h.AuthMe)
 
 	publicDir := filepath.Join("output", "public")
 	// Hertz maps Root + the full request path onto the filesystem, so the

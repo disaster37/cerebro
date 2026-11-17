@@ -244,6 +244,98 @@ func TestServerAuthEnabled_LoginFlow(t *testing.T) {
 	}
 }
 
+func TestServerAuthMe(t *testing.T) {
+	authMe := func(t *testing.T, res *protocol.Response) handler.AuthMeResponse {
+		t.Helper()
+		if res.StatusCode() != http.StatusOK {
+			t.Fatalf("HTTP status = %d, want 200", res.StatusCode())
+		}
+		env := envelope(t, res.Body())
+		if env.Status != 200 {
+			t.Fatalf("envelope status = %d, want 200", env.Status)
+		}
+		var body handler.AuthMeResponse
+		if err := json.Unmarshal(env.Body, &body); err != nil {
+			t.Fatalf("unmarshal auth/me body: %v (body %q)", err, env.Body)
+		}
+		return body
+	}
+
+	t.Run("auth disabled ignores cookies", func(t *testing.T) {
+		h, cfg := newServerEngine(t, "")
+		srv := NewServer(0, cfg, h)
+
+		w := ut.PerformRequest(srv.Engine, "GET", "/auth/me", nil,
+			ut.Header{Key: "Cookie", Value: auth.SessionCookie + "=whatever"})
+		res := w.Result()
+		body := authMe(t, res)
+		if body.AuthEnabled {
+			t.Error("authEnabled = true, want false")
+		}
+		if body.Username != "" {
+			t.Errorf("username = %q, want empty", body.Username)
+		}
+	})
+
+	t.Run("auth enabled unauthenticated", func(t *testing.T) {
+		h, cfg := newServerEngine(t, "basic")
+		srv := NewServer(0, cfg, h)
+
+		w := ut.PerformRequest(srv.Engine, "GET", "/auth/me", nil)
+		res := w.Result()
+		body := authMe(t, res)
+		if !body.AuthEnabled {
+			t.Error("authEnabled = false, want true")
+		}
+		if body.Username != "" {
+			t.Errorf("username = %q, want empty", body.Username)
+		}
+		if ck := res.Header.Peek("Set-Cookie"); len(ck) > 0 {
+			t.Errorf("Set-Cookie = %q, want none (no RedirectCookie interference)", ck)
+		}
+	})
+
+	t.Run("auth enabled with valid session", func(t *testing.T) {
+		h, cfg := newServerEngine(t, "basic")
+		srv := NewServer(0, cfg, h)
+
+		form := "user=u&password=p"
+		w := ut.PerformRequest(srv.Engine, "POST", "/auth/login", &ut.Body{
+			Body: strings.NewReader(form),
+			Len:  len(form),
+		}, ut.Header{Key: "Content-Type", Value: "application/x-www-form-urlencoded"})
+		cookie, ok := sessionCookieValue(t, w.Result())
+		if !ok || cookie == "" {
+			t.Fatal("session cookie not set after successful login")
+		}
+
+		w = ut.PerformRequest(srv.Engine, "GET", "/auth/me", nil,
+			ut.Header{Key: "Cookie", Value: auth.SessionCookie + "=" + cookie})
+		body := authMe(t, w.Result())
+		if !body.AuthEnabled {
+			t.Error("authEnabled = false, want true")
+		}
+		if body.Username != "u" {
+			t.Errorf("username = %q, want u", body.Username)
+		}
+	})
+
+	t.Run("auth enabled with forged cookie", func(t *testing.T) {
+		h, cfg := newServerEngine(t, "basic")
+		srv := NewServer(0, cfg, h)
+
+		w := ut.PerformRequest(srv.Engine, "GET", "/auth/me", nil,
+			ut.Header{Key: "Cookie", Value: auth.SessionCookie + "=forged"})
+		body := authMe(t, w.Result())
+		if !body.AuthEnabled {
+			t.Error("authEnabled = false, want true")
+		}
+		if body.Username != "" {
+			t.Errorf("username = %q, want empty for forged cookie", body.Username)
+		}
+	})
+}
+
 func TestServerAuthEnabled_PostLoginOpenRedirectBlocked(t *testing.T) {
 	h, cfg := newServerEngine(t, "basic")
 	srv := NewServer(0, cfg, h)

@@ -92,7 +92,19 @@ func (h *Handlers) process(c context.Context, ctx *app.RequestContext, fn Proces
 		}
 	}
 
-	target := domain.ElasticServer{Host: targetHost, Headers: headers}
+	trustCert := extractBool(body, "trustCertificate")
+	if trustCert && h.Log != nil {
+		h.Log.WithFields(logrus.Fields{
+			"host":     targetHost.Name,
+			"endpoint": string(ctx.Path()),
+		}).Warn("TLS certificate verification disabled for target cluster request (trustCertificate=true)")
+	}
+
+	target := domain.ElasticServer{
+		Host:             targetHost,
+		Headers:          headers,
+		TrustCertificate: trustCert,
+	}
 	req := domain.CerebroRequest{Target: target, Body: body, User: user}
 
 	resp, err := fn(c, req)
@@ -122,4 +134,27 @@ func extractField(body json.RawMessage, key string) string {
 	var s string
 	_ = json.Unmarshal(v, &s)
 	return s
+}
+
+// extractBool extracts an optional boolean field from a JSON object body.
+// Absent keys, null, non-boolean JSON types (strings like "true", numbers,
+// objects, arrays), or malformed JSON all return false so TLS verification is
+// never disabled by accident.
+func extractBool(body json.RawMessage, key string) bool {
+	if len(body) == 0 {
+		return false
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(body, &m); err != nil {
+		return false
+	}
+	v, ok := m[key]
+	if !ok || len(v) == 0 {
+		return false
+	}
+	var b bool
+	if err := json.Unmarshal(v, &b); err != nil {
+		return false
+	}
+	return b
 }
