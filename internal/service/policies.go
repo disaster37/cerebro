@@ -25,7 +25,7 @@ func (s *PoliciesService) ListIndexPolicies(ctx context.Context, req domain.Cere
 		return domain.ErrorResponse(502, err.Error()), nil
 	}
 	if !policiesResp.IsSuccess() {
-		if isUninitializedISM(policiesResp) {
+		if isUninitializedConfig(policiesResp) {
 			return emptyIndexLifecycle(backendType), nil
 		}
 		if policiesResp.Status == 404 {
@@ -85,6 +85,9 @@ func (s *PoliciesService) ListSnapshotPolicies(ctx context.Context, req domain.C
 		return domain.ErrorResponse(502, err.Error()), nil
 	}
 	if !policiesResp.IsSuccess() {
+		if isUninitializedConfig(policiesResp) {
+			return emptySnapshotLifecycle(), nil
+		}
 		if policiesResp.Status == 404 {
 			return unsupportedSnapshotLifecycle(backendType), nil
 		}
@@ -129,12 +132,21 @@ func (s *PoliciesService) backendType(ctx context.Context, req domain.CerebroReq
 	return bi.Type
 }
 
-func isUninitializedISM(resp *domain.Response) bool {
+func isUninitializedConfig(resp *domain.Response) bool {
 	if resp.Status != 404 {
 		return false
 	}
 	body := string(resp.Body)
-	return strings.Contains(body, ".opendistro-ism-config") || strings.Contains(body, "index_not_found_exception")
+	// OpenSearch lazily creates the ISM/SM config indices; before the first
+	// policy is created, GET /_plugins/_ism/policies and /_plugins/_sm/policies
+	// return 404 with "Configured indices are not found: [.opendistro-ism-config]"
+	// (or "index_not_found_exception"). Treat that as an empty policy list, not
+	// as a missing plugin.
+	return strings.Contains(body, "index_not_found_exception") ||
+		strings.Contains(body, "Configured indices are not found") ||
+		strings.Contains(body, ".opendistro-ism-config") ||
+		strings.Contains(body, ".opendistro-sm-config") ||
+		strings.Contains(body, ".opensearch-sm-config")
 }
 
 func emptyIndexLifecycle(backendType string) domain.Response {
@@ -182,4 +194,10 @@ func unsupportedSnapshotLifecycle(backendType string) domain.Response {
 		"warning":     feature + " is not available on this cluster (plugin disabled or unsupported distribution)",
 	})
 	return domain.NewResponse(200, body)
+}
+
+// emptySnapshotLifecycle returns the same shape as a successful (but empty)
+// snapshot lifecycle list: a JSON array of zero policies.
+func emptySnapshotLifecycle() domain.Response {
+	return domain.NewResponse(200, json.RawMessage("[]"))
 }

@@ -105,3 +105,24 @@ func TestListSnapshotPoliciesUnsupported(t *testing.T) {
 		t.Errorf("payload = %s, want unsupported warning", resp.Body)
 	}
 }
+
+func TestListSnapshotPoliciesUninitializedSM(t *testing.T) {
+	fake := &fakePolicyAPI{
+		snapshotResp: &domain.Response{Status: 404, Body: json.RawMessage(`{"error":{"type":"index_not_found_exception","reason":"no such index [.opendistro-sm-config]"}}`)},
+	}
+	svc := NewPoliciesService(&fakeClusterAPI{backendType: "opensearch"}, fake)
+	resp, err := svc.ListSnapshotPolicies(context.Background(), policyRequest())
+	if err != nil {
+		t.Fatalf("ListSnapshotPolicies: %v", err)
+	}
+	if resp.Status != 200 {
+		t.Fatalf("status = %d, want 200", resp.Status)
+	}
+	var out []domain.SnapshotPolicySummary
+	if err := json.Unmarshal(resp.Body, &out); err != nil {
+		t.Fatalf("unmarshal: %v (body=%s)", err, resp.Body)
+	}
+	if len(out) != 0 {
+		t.Errorf("policies = %+v, want empty list", out)
+	}
+}

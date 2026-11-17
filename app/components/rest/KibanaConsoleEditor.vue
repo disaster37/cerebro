@@ -43,6 +43,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'send', request: ParsedConsoleRequest): void
+  (e: 'active-change', request: ParsedConsoleRequest): void
 }>()
 
 const host = ref<HTMLDivElement | null>(null)
@@ -177,6 +178,11 @@ onMounted(() => {
         ]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) emit('update:modelValue', update.state.doc.toString())
+          if (update.docChanged || update.selectionSet) {
+            const requests = parseConsoleDocument(update.state.doc.toString())
+            const request = findRequestAtOffset(requests, update.state.selection.main.head) || requests[0] || null
+            if (request) emit('active-change', request)
+          }
         }),
         themeCompartment.of(colorMode.value === 'dark' ? darkTheme() : lightTheme()),
       ],

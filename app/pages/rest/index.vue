@@ -34,6 +34,7 @@
           v-model="doc"
           :meta="meta"
           @send="execute"
+          @active-change="onActiveChange"
         />
       </div>
       <div class="console-pane">
@@ -122,6 +123,7 @@ const size = ref(0)
 const sending = ref(false)
 const sendAnyway = ref(false)
 const lintErrors = ref<any[]>([])
+const cursorRequest = ref<ParsedConsoleRequest | null>(null)
 const history = ref<any[]>([])
 const historyOpen = ref(false)
 const shortcutsOpen = ref(false)
@@ -139,9 +141,14 @@ const methodOptions = [
 ]
 
 const activeRequest = computed<ParsedConsoleRequest | null>(() => {
+  if (cursorRequest.value) return cursorRequest.value
   const requests = parseConsoleDocument(doc.value)
   return requests[0] || null
 })
+
+function onActiveChange(request: ParsedConsoleRequest) {
+  cursorRequest.value = request
+}
 
 const filteredHistory = computed(() => methodFilter.value === 'all'
   ? history.value
