@@ -1,8 +1,25 @@
 import { describe, it, expect } from 'vitest'
 import { ref } from 'vue'
 import { EditorState } from '@codemirror/state'
+import { EditorView } from '@codemirror/view'
+import { autocompletion, currentCompletions, startCompletion } from '@codemirror/autocomplete'
 import { createConsoleCompletionSource } from '@/utils/consoleAutocomplete'
 import type { RestMetadata } from '@/types/cerebro'
+
+// CodeMirror measures text ranges; jsdom does not implement these.
+if (!Range.prototype.getClientRects) {
+  Range.prototype.getClientRects = () => ({
+    length: 0,
+    item: () => null,
+    [Symbol.iterator]: function* () {},
+  }) as any
+}
+if (!Range.prototype.getBoundingClientRect) {
+  Range.prototype.getBoundingClientRect = () => ({
+    x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0,
+    toJSON: () => ({}),
+  }) as any
+}
 
 function contextFor(doc: string, pos = doc.length) {
   const state = EditorState.create({ doc })
@@ -113,5 +130,88 @@ describe('consoleAutocomplete triggers', () => {
     const source = createConsoleCompletionSource(ref(meta()))
     const result = source(contextFor('GET _data'))
     expect(labels(result)).toContain('_data_stream')
+  })
+})
+
+async function realCompletions(doc: string, metaValue: RestMetadata): Promise<string[]> {
+  const parent = document.createElement('div')
+  document.body.appendChild(parent)
+  const view = new EditorView({
+    parent,
+    state: EditorState.create({
+      doc,
+      extensions: [autocompletion({ activateOnTyping: true, override: [createConsoleCompletionSource(ref(metaValue))] })],
+    }),
+  })
+  view.dispatch({ selection: { anchor: doc.length } })
+  startCompletion(view)
+  // startCompletion schedules the source with a 50ms debounce.
+  await new Promise((resolve) => setTimeout(resolve, 80))
+  const labels = currentCompletions(view.state).map((completion) => completion.label)
+  view.destroy()
+  parent.remove()
+  return labels
+}
+
+describe('consoleAutocomplete _search ranking (real CodeMirror filtering)', () => {
+  const cases = [
+    'GET _s',
+    'GET _sea',
+    'GET /_sea',
+    'POST _sea',
+    'GET sea',
+    'GET my-index/',
+    'GET my-index/_s',
+    'GET my-index/s',
+    'GET _all/_s',
+  ]
+
+  for (const backendType of ['elasticsearch', 'opensearch']) {
+    for (const doc of cases) {
+      it(`offers _search for "${doc}" on ${backendType}`, async () => {
+        const labels = await realCompletions(doc, meta({ backendType }))
+        expect(labels).toContain('_search')
+      })
+    }
+  }
+
+  it('ranks _search ahead of _msearch for GET _sea', async () => {
+    const labels = await realCompletions('GET _sea', meta())
+    expect(labels.indexOf('_search')).toBeGreaterThanOrEqual(0)
+    expect(labels.indexOf('_search')).toBeLessThan(labels.indexOf('_msearch'))
+  })
+
+  it('ranks _search first for GET my-index/s (single-letter non-underscore prefix)', async () => {
+    const labels = await realCompletions('GET my-index/s', meta())
+    expect(labels[0]).toBe('_search')
+  })
+
+  it('offers _search for GET _all/_s', async () => {
+    const labels = await realCompletions('GET _all/_s', meta())
+    expect(labels).toContain('_search')
+  })
+
+  it('offers OpenSearch index point-in-time endpoints', async () => {
+    const labels = await realCompletions('GET my-index/_search/point', meta({ backendType: 'opensearch' }))
+    expect(labels).toContain('_search/point_in_time')
+  })
+})
+
+describe('consoleAutocomplete endpoint catalogs', () => {
+  it('includes _search in the global endpoint catalog', () => {
+    const source = createConsoleCompletionSource(ref(meta()))
+    expect(labels(source(contextFor('GET _sea')))).toContain('_search')
+  })
+
+  it('routes _all/<endpoint> to index endpoints', () => {
+    const source = createConsoleCompletionSource(ref(meta()))
+    expect(labels(source(contextFor('GET _all/_s')))).toContain('_search')
+  })
+
+  it('deduplicates endpoint options', () => {
+    const source = createConsoleCompletionSource(ref(meta()))
+    const result = source(contextFor('GET my-index/'))
+    const all = labels(result)
+    expect(new Set(all).size).toBe(all.length)
   })
 })

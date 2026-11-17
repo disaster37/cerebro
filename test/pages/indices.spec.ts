@@ -162,9 +162,10 @@ describe('indices page', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('logs-app')
-    expect(wrapper.text()).toContain('View Backing Indices')
+    expect(wrapper.text()).toContain('Backing')
 
-    const view = wrapper.findAll('button').find((b) => b.text() === 'View Backing Indices')
+    const view = wrapper.findAll('button').find((b) => b.text() === 'Backing')
+    expect(view?.attributes('title')).toBe('View Backing Indices')
     await view!.trigger('click')
     await flushPromises()
 

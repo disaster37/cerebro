@@ -2,7 +2,7 @@
   <div id="app" class="min-h-screen bg-neutral-50 text-neutral-900 transition-colors dark:bg-neutral-950 dark:text-neutral-100">
     <NavbarComponent />
     <AlertComponent :alerts="alerts" @dismiss="dismissAlert" />
-    <main class="mx-auto max-w-7xl px-4 py-6">
+    <main class="w-full px-4 py-5 sm:px-6">
       <slot />
     </main>
   </div>

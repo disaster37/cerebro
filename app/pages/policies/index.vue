@@ -189,7 +189,7 @@
           </template>
           <template #last_failure-cell="{ row }">
             <div v-if="row.original.last_failure_message" class="space-y-1">
-              <p class="max-w-xs text-xs text-error-500">{{ row.original.last_failure_message }}</p>
+              <p class="text-xs text-error-500">{{ row.original.last_failure_message }}</p>
               <UButton size="xs" color="error" variant="ghost" @click="inspect('Snapshot policy failure', row.original)">Inspect Error</UButton>
             </div>
             <span v-else>-</span>
@@ -318,22 +318,22 @@ const filteredSnapshotPolicies = computed(() => snapshotFailedOnly.value
   : snapshotPolicies.value)
 
 const managedColumns: CerebroColumnDef<ManagedIndexStatus>[] = [
-  { id: 'select', header: '', sortable: false },
+  { id: 'select', header: '', sortable: false, headerClass: 'w-8', class: 'w-8' },
   { id: 'index', header: 'Index', accessorKey: 'index' },
   { id: 'policy_id', header: 'Policy', accessorKey: 'policy_id' },
   { id: 'phase', header: 'Phase / State', accessorKey: 'phase' },
   { id: 'action', header: 'Action / Step', accessorFn: (r) => `${r.action || ''}${r.step ? ` / ${r.step}` : ''}` },
-  { id: 'status', header: 'Status', accessorFn: (r) => r.failed ? 'FAILED' : 'HEALTHY' },
+  { id: 'status', header: 'Status', accessorFn: (r) => r.failed ? 'FAILED' : 'HEALTHY', class: 'whitespace-nowrap' },
   { id: 'reason', header: 'Error / Status Detail', accessorFn: (r) => r.reason || '' },
   { id: 'actions', header: 'Actions', sortable: false },
 ]
 
 const policyColumns: CerebroColumnDef<IndexPolicySummary>[] = [
   { id: 'id', header: 'Policy ID', accessorKey: 'id' },
-  { id: 'version', header: 'Version', accessorFn: (p) => p.version ?? 0 },
+  { id: 'version', header: 'Version', accessorFn: (p) => p.version ?? 0, class: 'whitespace-nowrap' },
   { id: 'phases', header: 'Phases / States', accessorFn: (p) => (p.phases || []).join(' -> ') },
-  { id: 'managed_count', header: 'Managed Indices', accessorFn: (p) => p.managed_count ?? 0 },
-  { id: 'failed_count', header: 'Failed Indices', accessorFn: (p) => p.failed_count ?? 0 },
+  { id: 'managed_count', header: 'Managed Indices', accessorFn: (p) => p.managed_count ?? 0, class: 'whitespace-nowrap' },
+  { id: 'failed_count', header: 'Failed Indices', accessorFn: (p) => p.failed_count ?? 0, class: 'whitespace-nowrap' },
   { id: 'modified_date', header: 'Last Modified', accessorKey: 'modified_date' },
   { id: 'actions', header: 'Actions', sortable: false },
 ]
@@ -342,10 +342,10 @@ const snapshotColumns: CerebroColumnDef<SnapshotPolicySummary>[] = [
   { id: 'id', header: 'Policy', accessorKey: 'id' },
   { id: 'repository', header: 'Repository', accessorKey: 'repository' },
   { id: 'schedule', header: 'Schedule', accessorKey: 'schedule' },
-  { id: 'status', header: 'Status', accessorFn: (p) => `${p.enabled ? 'Enabled' : 'Disabled'} ${p.current_state}` },
+  { id: 'status', header: 'Status', accessorFn: (p) => `${p.enabled ? 'Enabled' : 'Disabled'} ${p.current_state}`, class: 'whitespace-nowrap' },
   { id: 'last_success', header: 'Last Success', accessorFn: (p) => p.last_success_time ?? 0 },
   { id: 'last_failure', header: 'Last Failure', accessorFn: (p) => p.last_failure_time ?? 0 },
-  { id: 'taken', header: 'Taken / Failed', accessorFn: (p) => p.snapshots_taken ?? 0 },
+  { id: 'taken', header: 'Taken / Failed', accessorFn: (p) => p.snapshots_taken ?? 0, class: 'whitespace-nowrap' },
   { id: 'actions', header: 'Actions', sortable: false },
 ]
 

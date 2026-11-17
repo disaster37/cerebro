@@ -1,6 +1,6 @@
 <template>
   <header class="sticky top-0 z-50 border-b bg-white/95 backdrop-blur dark:bg-neutral-950/95" :class="healthBorder">
-    <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
+    <div class="flex w-full items-center gap-4 px-4 py-2 sm:px-6">
       <NuxtLink to="/" class="text-sm font-semibold">cerebro</NuxtLink>
 
       <UNavigationMenu

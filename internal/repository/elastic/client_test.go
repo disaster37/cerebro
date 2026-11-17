@@ -737,3 +737,45 @@ func TestESEngineNewEndpointPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestOSEngineNodesResourceUsageStats(t *testing.T) {
+	var rec recordedRequest
+	srv := newFakeOS(t, &rec)
+	defer srv.Close()
+
+	m, err := NewMultiClient(false)
+	if err != nil {
+		t.Fatalf("NewMultiClient: %v", err)
+	}
+	resp, err := m.os.NodesResourceUsageStats(context.Background(), targetFor(srv, ""))
+	if err != nil {
+		t.Fatalf("NodesResourceUsageStats: %v", err)
+	}
+	if resp.Status != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.Status)
+	}
+	if rec.method != http.MethodGet || rec.path != "/_nodes/stats/resource_usage_stats" {
+		t.Errorf("request = %s %s, want GET /_nodes/stats/resource_usage_stats", rec.method, rec.path)
+	}
+}
+
+func TestESEngineNodesResourceUsageStatsSynthetic404WithoutIO(t *testing.T) {
+	var rec recordedRequest
+	srv := newFakeES(t, &rec)
+	defer srv.Close()
+
+	c, err := NewClient(false)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	resp, err := c.NodesResourceUsageStats(context.Background(), targetFor(srv, ""))
+	if err != nil {
+		t.Fatalf("NodesResourceUsageStats: %v", err)
+	}
+	if resp.Status != http.StatusNotFound {
+		t.Errorf("status = %d, want synthetic 404", resp.Status)
+	}
+	if rec.method != "" || rec.path != "" {
+		t.Errorf("unexpected outbound request: %s %s", rec.method, rec.path)
+	}
+}

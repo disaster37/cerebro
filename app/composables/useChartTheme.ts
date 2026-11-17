@@ -110,6 +110,7 @@ export function useChartTheme() {
     },
     scales: {
       x: {
+        min: 0,
         grid: { color: tokens.value.gridColor },
         ticks: { color: tokens.value.mutedTextColor },
       },

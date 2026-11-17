@@ -12,6 +12,22 @@ export function formatNumber(value?: number | null): string {
   return new Intl.NumberFormat().format(value)
 }
 
+// normalizePercent treats negative sentinels (-1), NaN/Infinity, null and
+// undefined as unavailable, while preserving valid 0/0.0 idle readings.
+export function normalizePercent(value?: number | null): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value) || value < 0) return null
+  return value
+}
+
+// Displays 1 decimal place for fractional floats (12.34 -> "12.3%") and whole
+// integers without trailing ".0" (42 -> "42%", 0 / 0.0 -> "0%").
+export function formatPercent(value?: number | null): string {
+  const normalized = normalizePercent(value)
+  if (normalized === null) return 'N/A'
+  const rounded = Math.round(normalized * 10) / 10
+  return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`
+}
+
 export function formatDuration(millis?: number | null): string {
   if (!millis || millis <= 0) return '0s'
   const seconds = Math.floor(millis / 1000)

@@ -87,11 +87,11 @@ const filteredTokens = computed(() => tokenTypeFilter.value === 'all'
   : tokens.value.filter((t) => t.type === tokenTypeFilter.value))
 
 const columns: CerebroColumnDef<Token>[] = [
-  { id: 'position', header: 'Position', accessorFn: (t) => t.position ?? 0 },
+  { id: 'position', header: 'Position', accessorFn: (t) => t.position ?? 0, class: 'whitespace-nowrap' },
   { id: 'token', header: 'Token', accessorKey: 'token' },
-  { id: 'type', header: 'Type', accessorKey: 'type' },
-  { id: 'start_offset', header: 'Start Offset', accessorFn: (t) => t.start_offset ?? 0 },
-  { id: 'end_offset', header: 'End Offset', accessorFn: (t) => t.end_offset ?? 0 },
+  { id: 'type', header: 'Type', accessorKey: 'type', class: 'whitespace-nowrap' },
+  { id: 'start_offset', header: 'Start Offset', accessorFn: (t) => t.start_offset ?? 0, class: 'whitespace-nowrap' },
+  { id: 'end_offset', header: 'End Offset', accessorFn: (t) => t.end_offset ?? 0, class: 'whitespace-nowrap' },
 ]
 
 async function loadIndices() {

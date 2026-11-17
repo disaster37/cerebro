@@ -26,6 +26,7 @@
       :data="rows"
       :columns="columns"
       filter-placeholder="Filter CAT rows..."
+      :ui="{ th: 'px-1.5 py-1.5 text-[11px] font-semibold text-highlighted text-start align-middle whitespace-normal', td: 'px-1.5 py-1.5 text-[11px] text-muted align-middle whitespace-normal [overflow-wrap:anywhere]' }"
     />
     <p v-else-if="result" class="text-sm text-neutral-500">No rows returned.</p>
   </div>

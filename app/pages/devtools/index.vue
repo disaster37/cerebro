@@ -62,7 +62,7 @@
       </div>
     </div>
 
-    <UModal v-model:open="historyOpen" title="Request History">
+    <UModal v-model:open="historyOpen" title="Request History" :ui="{ content: 'sm:max-w-4xl' }">
       <template #header>
         <div class="flex w-full items-center justify-between">
           <h3 class="text-base font-semibold">Request History</h3>
@@ -79,7 +79,7 @@
           @select="insertHistory"
         >
           <template #body-cell="{ row }">
-            <span class="line-clamp-2 text-xs">{{ row.original.body }}</span>
+            <span class="line-clamp-2 text-xs [overflow-wrap:anywhere]">{{ row.original.body }}</span>
           </template>
         </CerebroTable>
       </template>
@@ -174,8 +174,8 @@ const filteredHistory = computed(() => methodFilter.value === 'all'
   : history.value.filter((h) => h.method === methodFilter.value))
 
 const historyColumns: CerebroColumnDef<any>[] = [
-  { id: 'created_at', header: 'Time', accessorKey: 'created_at' },
-  { id: 'method', header: 'Method', accessorKey: 'method' },
+  { id: 'created_at', header: 'Time', accessorKey: 'created_at', class: 'whitespace-nowrap' },
+  { id: 'method', header: 'Method', accessorKey: 'method', class: 'whitespace-nowrap' },
   { id: 'path', header: 'Path', accessorKey: 'path' },
   { id: 'body', header: 'Body', accessorKey: 'body' },
 ]

@@ -190,6 +190,10 @@ func (m *MultiClient) NodesStats(stats []string, ctx context.Context, target dom
 	return m.engine(ctx, target).NodesStats(stats, ctx, target)
 }
 
+func (m *MultiClient) NodesResourceUsageStats(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).NodesResourceUsageStats(ctx, target)
+}
+
 func (m *MultiClient) NodeStats(node string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).NodeStats(node, ctx, target)
 }

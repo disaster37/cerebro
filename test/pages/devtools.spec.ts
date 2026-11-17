@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { EditorView } from '@codemirror/view'
+import { currentCompletions, startCompletion } from '@codemirror/autocomplete'
 import KibanaConsoleEditor from '@/components/rest/KibanaConsoleEditor.vue'
 import DevToolsPage from '@/pages/devtools/index.vue'
 import { resetTestStubs } from '../setup'
@@ -130,5 +132,44 @@ describe('DevTools page', () => {
 
     expect(writeText).toHaveBeenCalled()
     expect(wrapper.find('[data-testid="copy-curl-feedback"]').text()).toContain('Copied cURL')
+  })
+})
+
+describe('KibanaConsoleEditor autocomplete', () => {
+  beforeEach(() => {
+    resetTestStubs()
+    vi.clearAllMocks()
+  })
+
+  async function completionsFor(doc: string): Promise<string[]> {
+    const wrapper = mount(KibanaConsoleEditor, {
+      props: { modelValue: doc, meta },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const editor = wrapper.find('.cm-editor').element as HTMLElement
+    const view = EditorView.findFromDOM(editor)
+    expect(view).toBeTruthy()
+    view!.dispatch({ selection: { anchor: doc.length } })
+    startCompletion(view!)
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    const labels = currentCompletions(view!.state).map((completion) => completion.label)
+    wrapper.unmount()
+    return labels
+  }
+
+  it('offers _search ahead of _msearch for GET _sea', async () => {
+    const labels = await completionsFor('GET _sea')
+    expect(labels).toContain('_search')
+    expect(labels.indexOf('_search')).toBeLessThan(labels.indexOf('_msearch'))
+  })
+
+  it('offers _search ahead of _msearch for GET my-index/_s', async () => {
+    const labels = await completionsFor('GET my-index/_s')
+    expect(labels).toContain('_search')
+    // CodeMirror's 2-character matcher rejects `_msearch` for the pattern `_s`
+    // (it only matches at word boundaries), so assert ordering when present.
+    const msearch = labels.indexOf('_msearch')
+    if (msearch >= 0) expect(labels.indexOf('_search')).toBeLessThan(msearch)
   })
 })

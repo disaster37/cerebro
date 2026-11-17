@@ -31,7 +31,7 @@
         <UInput v-model="indexFilter" size="sm" icon="i-lucide-search" placeholder="Index..." class="w-40" />
       </template>
       <template #filter-cell="{ row }">
-        <code class="text-xs">{{ row.original.filter }}</code>
+        <code class="whitespace-pre-wrap text-xs [overflow-wrap:anywhere]">{{ row.original.filter }}</code>
       </template>
       <template #actions-cell="{ row }">
         <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="removeAlias(row.original)">
@@ -105,7 +105,7 @@ const columns: CerebroColumnDef<AliasEntry>[] = [
   { id: 'filter', header: 'Filter', accessorFn: (a) => JSON.stringify(a.filter ?? null) },
   { id: 'search_routing', header: 'Search Routing', accessorFn: (a) => String(a.search_routing ?? '') },
   { id: 'index_routing', header: 'Index Routing', accessorFn: (a) => String(a.index_routing ?? '') },
-  { id: 'actions', header: 'Actions', sortable: false },
+  { id: 'actions', header: 'Actions', sortable: false, class: 'whitespace-nowrap' },
 ]
 
 async function load() {

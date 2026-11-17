@@ -69,7 +69,7 @@ type indexStatPayload struct {
 	} `json:"total"`
 }
 
-func ClusterOverview(state, nodesStats, idxStats, clusterSettings, aliases, health, nodesInfo, dataStreamsRaw json.RawMessage) (json.RawMessage, error) {
+func ClusterOverview(state, nodesStats, idxStats, clusterSettings, aliases, health, nodesInfo, dataStreamsRaw, resourceStatsRaw json.RawMessage) (json.RawMessage, error) {
 	var cs struct {
 		MasterNode         string          `json:"master_node"`
 		ClusterManagerNode string          `json:"cluster_manager_node"`
@@ -132,7 +132,7 @@ func ClusterOverview(state, nodesStats, idxStats, clusterSettings, aliases, heal
 		backingMeta = nil
 	}
 	indices := overviewIndices(cs.RoutingTable, cs.Blocks, idxS.Indices, aliases, backingMeta)
-	nodes := overviewNodes(masterID, nodesInfo, nodesStats)
+	nodes := overviewNodes(masterID, nodesInfo, nodesStats, resourceStatsRaw)
 	aggregateDataStreamStats(dataStreams, indices)
 
 	out := map[string]any{
@@ -408,20 +408,24 @@ func aliasNames(aliases aliasMap, index string) []string {
 	return out
 }
 
-func overviewNodes(masterID string, nodesInfo, nodesStats json.RawMessage) []map[string]any {
+func overviewNodes(masterID string, nodesInfo, nodesStats, resourceStats json.RawMessage) []map[string]any {
 	var ni struct {
 		Nodes map[string]json.RawMessage `json:"nodes"`
 	}
 	var ns struct {
 		Nodes map[string]json.RawMessage `json:"nodes"`
 	}
+	var rs struct {
+		Nodes map[string]json.RawMessage `json:"nodes"`
+	}
 	_ = json.Unmarshal(nodesInfo, &ni)
 	_ = json.Unmarshal(nodesStats, &ns)
+	_ = json.Unmarshal(resourceStats, &rs)
 
 	result := make([]map[string]any, 0, len(ns.Nodes))
 	for id, nsData := range ns.Nodes {
 		niData := ni.Nodes[id]
-		result = append(result, buildOverviewNode(id, masterID, niData, nsData))
+		result = append(result, buildOverviewNode(id, masterID, niData, nsData, rs.Nodes[id]))
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i]["name"].(string) < result[j]["name"].(string)
@@ -437,7 +441,7 @@ var internalNodeAttributes = map[string]bool{
 	"ml.config_version": true,
 }
 
-func buildOverviewNode(id, masterID string, info, stats json.RawMessage) map[string]any {
+func buildOverviewNode(id, masterID string, info, stats, resourceRaw json.RawMessage) map[string]any {
 	var is struct {
 		Version    string            `json:"version"`
 		Attributes map[string]string `json:"attributes"`
@@ -455,12 +459,17 @@ func buildOverviewNode(id, masterID string, info, stats json.RawMessage) map[str
 		Roles []string `json:"roles"`
 		OS    struct {
 			CPU struct {
-				Percent     int `json:"percent"`
+				Percent     *int `json:"percent"`
 				LoadAverage struct {
 					OneM *float64 `json:"1m"`
 				} `json:"load_average"`
 			} `json:"cpu"`
 		} `json:"os"`
+		Process struct {
+			CPU struct {
+				Percent *int `json:"percent"`
+			} `json:"cpu"`
+		} `json:"process"`
 		JVM struct {
 			Mem struct {
 				HeapUsedInBytes      int64   `json:"heap_used_in_bytes"`
@@ -477,8 +486,14 @@ func buildOverviewNode(id, masterID string, info, stats json.RawMessage) map[str
 			} `json:"total"`
 		} `json:"fs"`
 	}
+	var rs struct {
+		ResourceUsageStats struct {
+			CPUUtilizationPercent *float64 `json:"cpu_utilization_percent"`
+		} `json:"resource_usage_stats"`
+	}
 	_ = json.Unmarshal(info, &is)
 	_ = json.Unmarshal(stats, &ss)
+	_ = json.Unmarshal(resourceRaw, &rs)
 
 	roles := resolveRole(map[string]bool{
 		"data": true, "data_content": true, "data_hot": true,
@@ -494,6 +509,8 @@ func buildOverviewNode(id, masterID string, info, stats json.RawMessage) map[str
 		diskPct = 100 - int(100*float64(available)/float64(ss.FS.Total.TotalInBytes))
 	}
 
+	cpu := ResolveNodeCPU(rs.ResourceUsageStats.CPUUtilizationPercent, ss.OS.CPU.Percent, ss.Process.CPU.Percent)
+
 	attributes := map[string]string{}
 	for k, v := range is.Attributes {
 		if internalNodeAttributes[k] {
@@ -503,8 +520,8 @@ func buildOverviewNode(id, masterID string, info, stats json.RawMessage) map[str
 	}
 
 	var load any
-	if ss.OS.CPU.LoadAverage.OneM != nil {
-		load = *ss.OS.CPU.LoadAverage.OneM
+	if sanitized := sanitizeLoad(ss.OS.CPU.LoadAverage.OneM); sanitized != nil {
+		load = *sanitized
 	}
 
 	return map[string]any{
@@ -517,7 +534,11 @@ func buildOverviewNode(id, masterID string, info, stats json.RawMessage) map[str
 		"jvm_version":          is.JVM.Version,
 		"load_average":         load,
 		"available_processors": is.OS.AvailableProcessors,
-		"cpu_percent":          ss.OS.CPU.Percent,
+		"cpu_percent":          cpu.Effective,
+		"cpu_source":           cpu.Source,
+		"resource_cpu_percent": cpu.Resource,
+		"os_cpu_percent":       cpu.OS,
+		"process_cpu_percent":  cpu.Process,
 		"master":               roles.master,
 		"data":                 roles.data,
 		"coordinating":         roles.coordinating,

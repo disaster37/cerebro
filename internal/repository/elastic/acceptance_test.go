@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"math"
 	"os"
 	"strings"
 	"testing"
@@ -321,7 +322,7 @@ func runAcceptanceSuite(t *testing.T, url string, wantFlavor elastic.Flavor, wan
 			t.Fatalf("RefreshIndex data stream: %v", err)
 		}
 
-		overview := service.NewOverviewService(client, client, client, client)
+		overview := service.NewOverviewService(client, client, client, client, client)
 		overviewResp, err := overview.Index(ctx, domain.CerebroRequest{Target: target})
 		if err != nil {
 			t.Fatalf("Overview.Index: %v", err)
@@ -380,7 +381,7 @@ func runAcceptanceSuite(t *testing.T, url string, wantFlavor elastic.Flavor, wan
 		if _, err := client.RefreshIndex("cerebro-acceptance", ctx, target); err != nil {
 			t.Fatalf("RefreshIndex: %v", err)
 		}
-		overview := service.NewOverviewService(client, client, client, client)
+		overview := service.NewOverviewService(client, client, client, client, client)
 		resp, err := overview.Index(ctx, domain.CerebroRequest{Target: target})
 		if err != nil {
 			t.Fatalf("Overview.Index: %v", err)
@@ -436,9 +437,91 @@ func runAcceptanceSuite(t *testing.T, url string, wantFlavor elastic.Flavor, wan
 			if n.CurrentMaster {
 				masters++
 			}
+			if n.CPUPercent != nil && *n.CPUPercent < 0 {
+				t.Errorf("node %s cpu_percent = %v, want non-negative", n.Name, *n.CPUPercent)
+			}
+			if n.OSCPUPercent != nil && *n.OSCPUPercent < 0 {
+				t.Errorf("node %s os_cpu_percent = %d, want non-negative", n.Name, *n.OSCPUPercent)
+			}
+			if n.ProcessCPUPercent != nil && *n.ProcessCPUPercent < 0 {
+				t.Errorf("node %s process_cpu_percent = %d, want non-negative", n.Name, *n.ProcessCPUPercent)
+			}
+			if n.ResourceCPUPercent != nil && *n.ResourceCPUPercent < 0 {
+				t.Errorf("node %s resource_cpu_percent = %v, want non-negative", n.Name, *n.ResourceCPUPercent)
+			}
 		}
 		if masters != 1 {
 			t.Errorf("current masters = %d, want exactly 1", masters)
+		}
+
+		// /overview must expose the same non-negative, source-aware CPU data.
+		overview := service.NewOverviewService(client, client, client, client, client)
+		overviewResp, err := overview.Index(ctx, domain.CerebroRequest{Target: target})
+		if err != nil {
+			t.Fatalf("Overview.Index: %v", err)
+		}
+		if overviewResp.Status != 200 {
+			t.Fatalf("overview status = %d, want 200: %s", overviewResp.Status, overviewResp.Body)
+		}
+		var overviewBody struct {
+			Nodes []struct {
+				Name       string   `json:"name"`
+				CPUPercent *float64 `json:"cpu_percent"`
+			} `json:"nodes"`
+		}
+		if err := json.Unmarshal(overviewResp.Body, &overviewBody); err != nil {
+			t.Fatalf("unmarshal overview: %v", err)
+		}
+		for _, n := range overviewBody.Nodes {
+			if n.CPUPercent != nil && *n.CPUPercent < 0 {
+				t.Errorf("overview node %s cpu_percent = %v, want non-negative", n.Name, *n.CPUPercent)
+			}
+		}
+
+		resourceResp, err := client.NodesResourceUsageStats(ctx, target)
+		if err != nil {
+			t.Fatalf("NodesResourceUsageStats: %v", err)
+		}
+		switch wantFlavor {
+		case elastic.FlavorElasticsearch:
+			if resourceResp.Status != 404 {
+				t.Errorf("elasticsearch resource_usage_stats status = %d, want synthetic 404", resourceResp.Status)
+			}
+		case elastic.FlavorOpenSearch:
+			if resourceResp.Status != 200 {
+				t.Logf("OpenSearch resource_usage_stats unavailable (%d); CPU gracefully falls back", resourceResp.Status)
+				break
+			}
+			var resourceBody struct {
+				Nodes map[string]struct {
+					ResourceUsageStats struct {
+						CPUUtilizationPercent *float64 `json:"cpu_utilization_percent"`
+					} `json:"resource_usage_stats"`
+				} `json:"nodes"`
+			}
+			if err := json.Unmarshal(resourceResp.Body, &resourceBody); err != nil {
+				t.Fatalf("unmarshal resource_usage_stats: %v", err)
+			}
+			byID := make(map[string]domain.NodePageEntry, len(entries))
+			for _, n := range entries {
+				byID[n.ID] = n
+			}
+			for id, node := range resourceBody.Nodes {
+				cpu := node.ResourceUsageStats.CPUUtilizationPercent
+				if cpu == nil {
+					continue
+				}
+				entry, ok := byID[id]
+				if !ok {
+					continue
+				}
+				if entry.CPUSource != domain.CPUSourceResourceTracker {
+					t.Errorf("node %s cpu_source = %q, want %q", id, entry.CPUSource, domain.CPUSourceResourceTracker)
+				}
+				if want := math.Round(*cpu*100) / 100; entry.CPUPercent == nil || *entry.CPUPercent != want {
+					t.Errorf("node %s cpu_percent = %v, want %v", id, entry.CPUPercent, want)
+				}
+			}
 		}
 	})
 

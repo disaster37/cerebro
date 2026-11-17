@@ -1,12 +1,12 @@
 <template>
-  <div class="space-y-3">
+  <div class="w-full space-y-3">
     <div class="flex flex-wrap items-center gap-2">
       <UInput
         v-model="globalFilter"
         icon="i-lucide-search"
         size="sm"
         :placeholder="filterPlaceholder || 'Filter rows...'"
-        class="w-64"
+        class="w-full sm:w-64"
         data-testid="cerebro-table-filter"
       />
       <UButton
@@ -35,7 +35,9 @@
       :columns="columns"
       :loading="loading"
       :empty="emptyText || 'No rows found.'"
-      :row-key="rowKey"
+      :get-row-id="rowKey"
+      :ui="mergedUi"
+      class="w-full"
       @select="onSelect"
     >
       <template v-for="name in cellSlots" #[name]="slotProps">
@@ -58,6 +60,7 @@ const props = defineProps<{
   loading?: boolean
   emptyText?: string
   rowKey?: (row: T) => string
+  ui?: Record<string, string>
 }>()
 
 const emit = defineEmits<{ (e: 'select', row: T): void }>()
@@ -67,6 +70,14 @@ const globalFilter = ref('')
 const tableRef = ref<any>(null)
 const slots = useSlots()
 
+const defaultUi = {
+  root: 'relative w-full overflow-x-auto',
+  base: 'w-full table-auto',
+  th: 'px-2.5 py-2 text-xs font-semibold text-highlighted text-start align-middle whitespace-normal',
+  td: 'px-2.5 py-2 text-xs text-muted align-middle whitespace-normal [overflow-wrap:anywhere]',
+}
+
+const mergedUi = computed(() => ({ ...defaultUi, ...(props.ui ?? {}) }))
 const columns = computed(() => buildSortableColumns(props.columns))
 const filteredData = computed(() => props.data)
 const cellSlots = computed(() => Object.keys(slots).filter((name) => name.endsWith('-cell')))

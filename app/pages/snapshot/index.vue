@@ -96,7 +96,7 @@
       </template>
     </UModal>
 
-    <UModal v-model:open="inspectOpen" :title="`Snapshot ${inspectSnapshot?.snapshot || ''}`">
+    <UModal v-model:open="inspectOpen" :title="`Snapshot ${inspectSnapshot?.snapshot || ''}`" :ui="{ content: 'sm:max-w-3xl' }">
       <template #header>
         <h3 class="text-base font-semibold">Snapshot {{ inspectSnapshot?.snapshot }}</h3>
       </template>
@@ -105,19 +105,19 @@
           <pre class="max-h-64 overflow-auto rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-900"><code>{{ JSON.stringify(inspectSnapshot, null, 2) }}</code></pre>
           <div v-if="inspectSnapshot.failures?.length">
             <h4 class="mb-2 text-sm font-semibold text-error-500">Shard Failures</h4>
-            <table class="w-full text-xs">
+            <table class="w-full table-fixed text-xs">
               <thead>
                 <tr class="text-left text-neutral-500">
-                  <th>Index</th><th>Shard</th><th>Node</th><th>Status</th><th>Reason</th>
+                  <th class="p-1 text-left align-top [overflow-wrap:anywhere]">Index</th><th class="p-1 text-left align-top [overflow-wrap:anywhere]">Shard</th><th class="p-1 text-left align-top [overflow-wrap:anywhere]">Node</th><th class="p-1 text-left align-top [overflow-wrap:anywhere]">Status</th><th class="p-1 text-left align-top [overflow-wrap:anywhere]">Reason</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(failure, i) in inspectSnapshot.failures" :key="i">
-                  <td>{{ failure.index }}</td>
-                  <td>{{ failure.shard_id }}</td>
-                  <td>{{ failure.node_id }}</td>
-                  <td>{{ failure.status }}</td>
-                  <td>{{ failure.reason }}</td>
+                  <td class="p-1 align-top [overflow-wrap:anywhere]">{{ failure.index }}</td>
+                  <td class="p-1 align-top [overflow-wrap:anywhere]">{{ failure.shard_id }}</td>
+                  <td class="p-1 align-top [overflow-wrap:anywhere]">{{ failure.node_id }}</td>
+                  <td class="p-1 align-top [overflow-wrap:anywhere]">{{ failure.status }}</td>
+                  <td class="p-1 align-top [overflow-wrap:anywhere]">{{ failure.reason }}</td>
                 </tr>
               </tbody>
             </table>
@@ -192,12 +192,12 @@ const createIndices = computed(() => clusterIndices.value.filter((i) => createFo
 
 const columns: CerebroColumnDef<SnapshotEntry>[] = [
   { id: 'snapshot', header: 'Snapshot', accessorKey: 'snapshot' },
-  { id: 'state', header: 'State', accessorKey: 'state' },
-  { id: 'start_time_in_millis', header: 'Started', accessorFn: (s) => s.start_time_in_millis ?? 0 },
-  { id: 'duration_in_millis', header: 'Duration', accessorFn: (s) => s.duration_in_millis ?? 0 },
-  { id: 'indices_count', header: 'Indices', accessorFn: (s) => (s.indices || []).length },
-  { id: 'failed_shards', header: 'Shards', accessorFn: (s) => s.shards?.failed ?? 0 },
-  { id: 'actions', header: 'Actions', sortable: false },
+  { id: 'state', header: 'State', accessorKey: 'state', class: 'whitespace-nowrap' },
+  { id: 'start_time_in_millis', header: 'Started', accessorFn: (s) => s.start_time_in_millis ?? 0, class: 'whitespace-nowrap' },
+  { id: 'duration_in_millis', header: 'Duration', accessorFn: (s) => s.duration_in_millis ?? 0, class: 'whitespace-nowrap' },
+  { id: 'indices_count', header: 'Indices', accessorFn: (s) => (s.indices || []).length, class: 'whitespace-nowrap' },
+  { id: 'failed_shards', header: 'Shards', accessorFn: (s) => s.shards?.failed ?? 0, class: 'whitespace-nowrap' },
+  { id: 'actions', header: 'Actions', sortable: false, class: 'whitespace-nowrap' },
 ]
 
 function stateColor(state: string): string {

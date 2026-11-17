@@ -63,6 +63,8 @@ export interface TemplateEntry {
   template: any
 }
 
+export type NodeCpuSource = 'resource_tracker' | 'os' | 'process'
+
 export interface OverviewNode {
   id: string
   name: string
@@ -77,7 +79,11 @@ export interface OverviewNode {
   jvm_version: string
   load_average: number | null
   available_processors: number
-  cpu_percent: number
+  cpu_percent: number | null
+  cpu_source?: NodeCpuSource
+  resource_cpu_percent?: number | null
+  os_cpu_percent?: number | null
+  process_cpu_percent: number | null
   heap: { used: number; committed: number; used_percent: number; max: number }
   disk: { total: number; free: number; used_percent: number }
   attributes: Record<string, string>
@@ -119,8 +125,11 @@ export interface NodeEntry {
   load_average_5m?: number | null
   load_average_15m?: number | null
   available_processors: number
-  cpu_percent: number
-  process_cpu_percent: number
+  cpu_percent: number | null
+  cpu_source?: NodeCpuSource
+  resource_cpu_percent?: number | null
+  os_cpu_percent?: number | null
+  process_cpu_percent: number | null
   uptime_in_millis: number
   attributes: Record<string, string>
   heap: { used: number; committed: number; used_percent: number; max: number }

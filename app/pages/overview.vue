@@ -89,7 +89,7 @@
         <table class="w-full table-fixed border-collapse text-xs">
           <thead>
             <tr class="border-b border-neutral-200 dark:border-neutral-800">
-              <th class="w-64 p-2 text-left align-top">
+              <th class="w-60 p-2 text-left align-top">
                 <div class="flex flex-wrap items-center gap-1">
                   <UDropdownMenu :items="allocationMenu">
                     <UButton
@@ -112,13 +112,13 @@
                   <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-chevron-left" :disabled="page === 0" @click="page--" />
                   <span class="text-[11px] text-neutral-500">{{ page + 1 }} / {{ pageCount }}</span>
                   <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-chevron-right" :disabled="page >= pageCount - 1" @click="page++" />
-                  <USelect v-model="pageSize" :items="pageSizes" size="xs" class="w-16" />
+                  <USelect v-model="pageSize" :items="pageSizes" size="xs" class="w-16" @update:model-value="pageSizeManuallySet = true" />
                 </div>
               </th>
               <th
                 v-for="idx in pagedIndices"
                 :key="idx.name"
-                class="min-w-40 border-l border-neutral-200 p-2 text-left align-top dark:border-neutral-800"
+                class="border-l border-neutral-200 p-2 text-left align-top [overflow-wrap:anywhere] dark:border-neutral-800"
                 :class="indexHeaderClass(idx)"
               >
                 <div class="flex items-center justify-between gap-1">
@@ -292,6 +292,7 @@ const indexSortKey = ref('name')
 const indexSortDir = ref<'asc' | 'desc'>('asc')
 const page = ref(0)
 const pageSize = ref(8)
+const pageSizeManuallySet = ref(false)
 const autoRefresh = ref('off')
 const relocatingShard = ref<{ index: string; shard: OverviewShard } | null>(null)
 const inspectorOpen = ref(false)
@@ -312,7 +313,7 @@ const refreshOptions = [
   { label: '30s', value: '30' },
   { label: '60s', value: '60' },
 ]
-const pageSizes = [5, 8, 12]
+const pageSizes = [4, 6, 8, 10, 12]
 const sortKeys = [
   { label: 'Name', value: 'name' },
   { label: 'Docs', value: 'doc_count' },
@@ -666,14 +667,24 @@ watch(autoRefresh, applyAutoRefresh)
 watch([indexFilter, showClosed, showSpecial, showBacking, unhealthyOnly, dataStreamFilter, pageSize], () => { page.value = 0 })
 watch(pageCount, (count) => { if (page.value >= count) page.value = Math.max(count - 1, 0) })
 
+function computeOverviewPageSize(): number {
+  if (typeof window === 'undefined') return pageSize.value
+  return Math.min(Math.max(Math.floor((window.innerWidth - 280) / 190), 3), 12)
+}
+
+function applyOverviewPageSize() {
+  if (pageSizeManuallySet.value) return
+  pageSize.value = computeOverviewPageSize()
+}
+
 onMounted(() => {
-  if (typeof window !== 'undefined') {
-    pageSize.value = Math.max(Math.floor(window.innerWidth / 260), 3)
-  }
+  applyOverviewPageSize()
+  if (typeof window !== 'undefined') window.addEventListener('resize', applyOverviewPageSize)
   load()
 })
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  if (typeof window !== 'undefined') window.removeEventListener('resize', applyOverviewPageSize)
 })
 </script>

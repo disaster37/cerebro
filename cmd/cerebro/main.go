@@ -103,7 +103,7 @@ func run(c *cli.Context) error {
 		Secret: cfg.Secret,
 
 		Connect:         service.NewConnectService(esClient),
-		Overview:        service.NewOverviewService(esClient, esClient, esClient, esClient),
+		Overview:        service.NewOverviewService(esClient, esClient, esClient, esClient, esClient),
 		Nodes:           service.NewNodesService(esClient, esClient),
 		Navbar:          service.NewNavbarService(esClient),
 		Rest:            service.NewRestService(esClient, esClient, esClient, esClient, historyRepo, cfg.RestHistorySize),

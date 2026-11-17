@@ -87,6 +87,16 @@ func (c *Client) NodesStats(stats []string, ctx context.Context, target domain.E
 	return toResponse(res.StatusCode, res.Body)
 }
 
+// NodesResourceUsageStats is unsupported on Elasticsearch. Return a synthetic
+// 404 immediately (no network round-trip) so callers fall back to the MXBean
+// os/process CPU sources without wasting a request or surfacing a 400.
+func (c *Client) NodesResourceUsageStats(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return &domain.Response{
+		Status: http.StatusNotFound,
+		Body:   json.RawMessage(`{"error":"resource_usage_stats unsupported on elasticsearch"}`),
+	}, nil
+}
+
 func (c *Client) NodeStats(node string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	res, err := esapi.NodesStatsRequest{NodeID: []string{node}}.Do(withTarget(ctx, target), c.es)
 	if err != nil {

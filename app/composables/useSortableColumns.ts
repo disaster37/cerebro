@@ -7,8 +7,24 @@ export interface CerebroColumnDef<T> {
   accessorKey?: keyof T & string
   accessorFn?: (row: T) => string | number | boolean | null | undefined
   sortable?: boolean
+  sortUndefined?: 'first' | 'last' | false | -1 | 1
   cell?: TableColumn<T>['cell']
   meta?: TableColumn<T>['meta']
+  class?: string
+  headerClass?: string
+}
+
+function columnMeta<T>(def: CerebroColumnDef<T>): TableColumn<T>['meta'] {
+  const existing = (def.meta as { class?: Record<string, string> } | undefined)?.class
+  if (!def.meta && !def.class && !def.headerClass) return undefined
+  return {
+    ...def.meta,
+    class: {
+      ...existing,
+      ...(def.headerClass ? { th: def.headerClass } : {}),
+      ...(def.class ? { td: def.class } : {}),
+    },
+  } as TableColumn<T>['meta']
 }
 
 export function buildSortableColumns<T>(defs: CerebroColumnDef<T>[]): TableColumn<T>[] {
@@ -18,7 +34,8 @@ export function buildSortableColumns<T>(defs: CerebroColumnDef<T>[]): TableColum
       accessorKey: def.accessorKey,
       accessorFn: def.accessorFn,
       cell: def.cell,
-      meta: def.meta,
+      meta: columnMeta(def),
+      sortUndefined: def.sortUndefined ?? 'last',
     } as TableColumn<T>
 
     if (def.sortable === false) {
@@ -42,13 +59,13 @@ export function buildSortableColumns<T>(defs: CerebroColumnDef<T>[]): TableColum
           variant: 'ghost',
           color: 'neutral',
           size: 'xs',
-          class: 'px-0',
+          class: 'px-0 h-auto text-left whitespace-normal font-semibold',
           'data-testid': `sort-${def.id}`,
           onClick: () => tableColumn.toggleSorting(tableColumn.getIsSorted() === 'asc'),
         },
         () => [
-          h('span', { class: 'mr-1' }, def.header),
-          h('span', { class: icon, 'aria-hidden': 'true' }),
+          h('span', { class: 'mr-1 leading-tight' }, def.header),
+          h('span', { class: `${icon} shrink-0`, 'aria-hidden': 'true' }),
         ],
       )
     }

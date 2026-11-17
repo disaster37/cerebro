@@ -26,7 +26,7 @@
           <h5 class="text-sm font-semibold">Node comparison</h5>
         </template>
         <div class="h-72">
-          <Bar :key="`nodes-${colorMode.value}`" :data="chartData" :options="barOptions" />
+          <Bar :key="`nodes-${colorMode.value}`" :data="chartData" :options="nodeBarOptions" />
         </div>
       </UCard>
 
@@ -71,9 +71,16 @@
           </div>
         </template>
         <template #cpu-cell="{ row }">
-          <div>{{ row.original.cpu_percent ?? 0 }}%</div>
-          <div class="text-[11px] text-neutral-500">process: {{ row.original.process_cpu_percent ?? 0 }}%</div>
-          <UProgress :model-value="row.original.cpu_percent ?? 0" size="xs" color="info" />
+          <UTooltip :text="cpuTooltip(row.original)">
+            <span :class="effectiveCpuOf(row.original) === null ? 'text-neutral-400' : ''">{{ formatPercent(effectiveCpuOf(row.original)) }}</span>
+          </UTooltip>
+          <div class="text-[11px] text-neutral-500">{{ cpuSubtext(row.original) }}</div>
+          <UProgress
+            :model-value="Math.min(effectiveCpuOf(row.original) ?? 0, 100)"
+            size="xs"
+            :color="effectiveCpuOf(row.original) !== null ? 'info' : 'neutral'"
+            :class="{ 'opacity-35': effectiveCpuOf(row.original) === null }"
+          />
         </template>
         <template #heap-cell="{ row }">
           <div>{{ row.original.heap?.used_percent ?? 0 }}%</div>
@@ -108,8 +115,8 @@ import { extractEnvelopeError, useAPI } from '../../composables/useAPI'
 import { useCluster } from '../../composables/useCluster'
 import { useChartTheme } from '../../composables/useChartTheme'
 import type { CerebroColumnDef } from '../../composables/useSortableColumns'
-import type { NodeEntry } from '../../types/cerebro'
-import { formatBytes, formatDuration } from '../../utils/format'
+import type { NodeCpuSource, NodeEntry } from '../../types/cerebro'
+import { formatBytes, formatDuration, formatPercent, normalizePercent } from '../../utils/format'
 
 const { clusterHost } = useCluster()
 const { apiCall } = useAPI()
@@ -136,25 +143,78 @@ const filteredNodes = computed(() => nodes.value.filter((n) => {
     || (n.coordinating && roleFilter.value.C)
 }))
 
-const chartData = computed(() => ({
-  labels: filteredNodes.value.map((n) => n.name),
-  datasets: [
-    { label: 'OS CPU %', data: filteredNodes.value.map((n) => n.cpu_percent ?? 0), backgroundColor: tokens.value.series.replica },
-    { label: 'Process CPU %', data: filteredNodes.value.map((n) => n.process_cpu_percent ?? 0), backgroundColor: tokens.value.series.relocating },
+function effectiveCpuOf(node: NodeEntry): number | null {
+  return normalizePercent(node.cpu_percent)
+    ?? normalizePercent(node.resource_cpu_percent)
+    ?? normalizePercent(node.os_cpu_percent)
+    ?? normalizePercent(node.process_cpu_percent)
+}
+
+function cpuSourceOf(node: NodeEntry): NodeCpuSource | undefined {
+  if (node.cpu_source) return node.cpu_source
+  if (normalizePercent(node.resource_cpu_percent) !== null) return 'resource_tracker'
+  if (normalizePercent(node.cpu_percent) !== null || normalizePercent(node.os_cpu_percent) !== null) return 'os'
+  if (normalizePercent(node.process_cpu_percent) !== null) return 'process'
+  return undefined
+}
+
+function cpuSubtext(node: NodeEntry): string {
+  const source = cpuSourceOf(node)
+  if (source === 'resource_tracker') return 'process CPU (resource tracker)'
+  if (source === 'process') return 'process CPU (OS: N/A)'
+  return `process: ${formatPercent(node.process_cpu_percent)}`
+}
+
+function cpuTooltip(node: NodeEntry): string {
+  const source = cpuSourceOf(node)
+  const label = source === 'resource_tracker'
+    ? 'resource tracker — process CPU window avg'
+    : source === 'os'
+      ? 'OS CPU'
+      : source === 'process'
+        ? 'JVM process CPU'
+        : 'unavailable'
+  return `Effective: ${formatPercent(effectiveCpuOf(node))} (${label}) | OS CPU: ${formatPercent(node.os_cpu_percent)} | JVM process CPU: ${formatPercent(node.process_cpu_percent)}`
+}
+
+const chartData = computed(() => {
+  const cpuSeries = filteredNodes.value.map((n) => effectiveCpuOf(n))
+  const procSeries = filteredNodes.value.map((n) => normalizePercent(n.process_cpu_percent))
+  const datasets: any[] = []
+  if (cpuSeries.some((v) => v !== null)) {
+    datasets.push({ label: 'CPU %', data: cpuSeries, backgroundColor: tokens.value.series.replica })
+  }
+  if (procSeries.some((v) => v !== null)) {
+    datasets.push({ label: 'JVM Process CPU %', data: procSeries, backgroundColor: tokens.value.series.relocating })
+  }
+  datasets.push(
     { label: 'Heap %', data: filteredNodes.value.map((n) => n.heap?.used_percent ?? 0), backgroundColor: tokens.value.series.warning },
     { label: 'Disk %', data: filteredNodes.value.map((n) => n.disk?.used_percent ?? 0), backgroundColor: tokens.value.series.danger },
-  ],
+  )
+  return { labels: filteredNodes.value.map((n) => n.name), datasets }
+})
+
+const nodeBarOptions = computed(() => ({
+  ...barOptions.value,
+  plugins: {
+    ...barOptions.value.plugins,
+    legend: {
+      display: true,
+      position: 'bottom' as const,
+      labels: { color: tokens.value.textColor, boxWidth: 10, boxHeight: 10 },
+    },
+  },
 }))
 
 const columns: CerebroColumnDef<NodeEntry>[] = [
   { id: 'name', header: 'Name', accessorKey: 'name' },
-  { id: 'role', header: 'Role', accessorFn: (n) => `${n.master ? 'M' : ''}${n.data ? 'D' : ''}${n.ingest ? 'I' : ''}${n.coordinating ? 'C' : ''}` },
-  { id: 'load', header: 'Load', accessorFn: (n) => n.load_average ?? -1 },
-  { id: 'cpu', header: 'CPU', accessorFn: (n) => n.cpu_percent ?? 0 },
-  { id: 'heap', header: 'Heap', accessorFn: (n) => n.heap?.used_percent ?? 0 },
-  { id: 'disk', header: 'Disk', accessorFn: (n) => n.disk?.used_percent ?? 0 },
-  { id: 'uptime', header: 'Uptime', accessorFn: (n) => n.uptime_in_millis ?? 0 },
-  { id: 'es_version', header: 'Version', accessorKey: 'es_version' },
+  { id: 'role', header: 'Role', accessorFn: (n) => `${n.master ? 'M' : ''}${n.data ? 'D' : ''}${n.ingest ? 'I' : ''}${n.coordinating ? 'C' : ''}`, class: 'whitespace-nowrap' },
+  { id: 'load', header: 'Load', accessorFn: (n) => (n.load_average !== null && n.load_average !== undefined && n.load_average >= 0 ? n.load_average : undefined), sortUndefined: 'last' },
+  { id: 'cpu', header: 'CPU', accessorFn: (n) => effectiveCpuOf(n) ?? undefined, sortUndefined: 'last', class: 'min-w-28' },
+  { id: 'heap', header: 'Heap', accessorFn: (n) => n.heap?.used_percent ?? 0, class: 'min-w-28' },
+  { id: 'disk', header: 'Disk', accessorFn: (n) => n.disk?.used_percent ?? 0, class: 'min-w-28' },
+  { id: 'uptime', header: 'Uptime', accessorFn: (n) => n.uptime_in_millis ?? 0, class: 'whitespace-nowrap' },
+  { id: 'es_version', header: 'Version', accessorKey: 'es_version', class: 'whitespace-nowrap' },
 ]
 
 function loadLabel(node: NodeEntry) {

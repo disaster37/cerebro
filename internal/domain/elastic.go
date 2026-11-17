@@ -65,6 +65,7 @@ type AliasAPI interface {
 type NodeAPI interface {
 	Nodes(flags []string, ctx context.Context, target ElasticServer) (*Response, error)
 	NodesStats(stats []string, ctx context.Context, target ElasticServer) (*Response, error)
+	NodesResourceUsageStats(ctx context.Context, target ElasticServer) (*Response, error)
 	NodeStats(node string, ctx context.Context, target ElasticServer) (*Response, error)
 	GetNodes(ctx context.Context, target ElasticServer) (*Response, error)
 }

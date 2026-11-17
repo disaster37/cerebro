@@ -182,9 +182,11 @@ export const nuxtUiStubs = {
     template: `<div class="client-only"><slot /></div>`,
   },
   UTable: {
-    props: ['data', 'columns', 'sorting', 'globalFilter', 'loading', 'empty'],
+    inheritAttrs: false,
+    props: ['data', 'columns', 'sorting', 'globalFilter', 'loading', 'empty', 'ui', 'getRowId'],
     emits: ['update:sorting', 'update:globalFilter', 'select'],
-    setup(props: any, { slots, emit }: any) {
+    setup(props: any, { slots, emit, attrs }: any) {
+      const isUndefined = (value: any) => value === undefined || value === null
       const rows = computed(() => {
         let data = [...(props.data || [])]
         if (props.globalFilter) {
@@ -199,6 +201,12 @@ export const nuxtUiStubs = {
             data.sort((a: any, b: any) => {
               const av = col.accessorFn ? col.accessorFn(a) : a[col.accessorKey]
               const bv = col.accessorFn ? col.accessorFn(b) : b[col.accessorKey]
+              if (isUndefined(av) || isUndefined(bv)) {
+                if (isUndefined(av) && isUndefined(bv)) return 0
+                const mode = col.sortUndefined
+                if (mode === 'first' || mode === -1) return isUndefined(av) ? -1 : 1
+                if (mode === 'last' || mode === 1 || mode === undefined) return isUndefined(av) ? 1 : -1
+              }
               if (av === bv) return 0
               const cmp = av > bv ? 1 : -1
               return sort.desc ? -cmp : cmp
@@ -224,18 +232,30 @@ export const nuxtUiStubs = {
         })
       }
 
-      return () => h('table', { class: 'utable' }, [
+      return () => h('table', {
+        class: ['utable', attrs.class],
+        'data-ui': JSON.stringify(props.ui || {}),
+        'data-row-ids': props.getRowId ? JSON.stringify(rows.value.map((row: any) => props.getRowId(row))) : undefined,
+      }, [
         h('thead', {}, [
-          h('tr', {}, (props.columns || []).map((col: any) => h('th', { key: col.id || col.accessorKey }, [headerFor(col)]))),
+          h('tr', {}, (props.columns || []).map((col: any) => h('th', {
+            key: col.id || col.accessorKey,
+            class: col.meta?.class?.th,
+          }, [headerFor(col)]))),
         ]),
-        h('tbody', {}, rows.value.map((item: any, rIdx: number) => h('tr', { key: rIdx }, (props.columns || []).map((col: any, cIdx: number) => {
+        h('tbody', {}, rows.value.map((item: any, rIdx: number) => h('tr', {
+          key: props.getRowId ? props.getRowId(item) : rIdx,
+        }, (props.columns || []).map((col: any, cIdx: number) => {
           const name = `${col.id || col.accessorKey}-cell`
           const content = slots[name]
             ? slots[name]({ row: { original: item } })
             : col.cell
               ? col.cell({ row: { original: item } })
               : item[col.accessorKey]
-          return h('td', { key: col.id || col.accessorKey || cIdx }, [content])
+          return h('td', {
+            key: col.id || col.accessorKey || cIdx,
+            class: col.meta?.class?.td,
+          }, [content])
         })))),
       ])
     },

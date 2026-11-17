@@ -123,11 +123,11 @@ const filteredTemplates = computed(() => templates.value.filter((t) => {
 
 const columns: CerebroColumnDef<TemplateEntry>[] = [
   { id: 'name', header: 'Name', accessorKey: 'name' },
-  { id: 'type', header: 'Type', accessorKey: 'type' },
+  { id: 'type', header: 'Type', accessorKey: 'type', class: 'whitespace-nowrap' },
   { id: 'patterns', header: 'Patterns', accessorFn: (t) => (t.patterns || []).join(', ') },
-  { id: 'order', header: 'Order', accessorFn: (t) => t.order ?? 0 },
-  { id: 'version', header: 'Version', accessorFn: (t) => t.version ?? 0 },
-  { id: 'actions', header: 'Actions', sortable: false },
+  { id: 'order', header: 'Order', accessorFn: (t) => t.order ?? 0, class: 'whitespace-nowrap' },
+  { id: 'version', header: 'Version', accessorFn: (t) => t.version ?? 0, class: 'whitespace-nowrap' },
+  { id: 'actions', header: 'Actions', sortable: false, class: 'whitespace-nowrap' },
 ]
 
 async function load() {

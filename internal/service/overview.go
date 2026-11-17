@@ -12,10 +12,11 @@ type OverviewService struct {
 	cluster     domain.ClusterAPI
 	indices     domain.IndexAPI
 	dataStreams domain.DataStreamAPI
+	nodes       domain.NodeAPI
 }
 
-func NewOverviewService(raw domain.RawAPI, cluster domain.ClusterAPI, indices domain.IndexAPI, dataStreams domain.DataStreamAPI) *OverviewService {
-	return &OverviewService{raw: raw, cluster: cluster, indices: indices, dataStreams: dataStreams}
+func NewOverviewService(raw domain.RawAPI, cluster domain.ClusterAPI, indices domain.IndexAPI, dataStreams domain.DataStreamAPI, nodes domain.NodeAPI) *OverviewService {
+	return &OverviewService{raw: raw, cluster: cluster, indices: indices, dataStreams: dataStreams, nodes: nodes}
 }
 
 func (s *OverviewService) Index(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -57,7 +58,16 @@ func (s *OverviewService) Index(ctx context.Context, req domain.CerebroRequest) 
 		}
 	}
 
-	body, err := domain.ClusterOverview(stateResp.Body, responses[0], responses[1], responses[2], responses[3], responses[4], responses[5], dataStreamsRaw)
+	// OpenSearch's cgroup-aware resource tracker is a best-effort secondary
+	// source; Elasticsearch or older/restricted clusters simply fall back.
+	var resourceStatsRaw json.RawMessage
+	if s.nodes != nil {
+		if res, rerr := s.nodes.NodesResourceUsageStats(ctx, req.Target); rerr == nil && res != nil && res.IsSuccess() {
+			resourceStatsRaw = res.Body
+		}
+	}
+
+	body, err := domain.ClusterOverview(stateResp.Body, responses[0], responses[1], responses[2], responses[3], responses[4], responses[5], dataStreamsRaw, resourceStatsRaw)
 	if err != nil {
 		return domain.ErrorResponse(500, err.Error()), nil
 	}

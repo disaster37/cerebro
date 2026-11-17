@@ -89,6 +89,10 @@ func (o *osClient) NodesStats(stats []string, ctx context.Context, target domain
 	return o.do(ctx, target, http.MethodGet, "/_nodes/stats/"+strings.Join(stats, ","), nil, "", "")
 }
 
+func (o *osClient) NodesResourceUsageStats(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodGet, "/_nodes/stats/resource_usage_stats", nil, "", "")
+}
+
 func (o *osClient) NodeStats(node string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return o.do(ctx, target, http.MethodGet, "/_nodes/"+url.PathEscape(node)+"/stats", nil, "", "")
 }

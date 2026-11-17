@@ -43,7 +43,7 @@
             <UBadge :color="statusColor(row.original.name)" variant="soft">
               {{ statusLabel(row.original.name) }}
             </UBadge>
-            <p v-if="checkMap[row.original.name]?.error" class="max-w-xs text-[11px] text-error-500">
+            <p v-if="checkMap[row.original.name]?.error" class="text-[11px] text-error-500">
               {{ checkMap[row.original.name]?.error }}
             </p>
           </div>
@@ -171,12 +171,12 @@ const filteredRepos = computed(() => typeFilter.value === 'all'
 
 const columns: CerebroColumnDef<RepositoryEntry>[] = [
   { id: 'name', header: 'Name', accessorKey: 'name' },
-  { id: 'type', header: 'Type', accessorKey: 'type' },
+  { id: 'type', header: 'Type', accessorKey: 'type', class: 'whitespace-nowrap' },
   { id: 'location', header: 'Location / Settings', accessorFn: (r) => locationOf(r) },
-  { id: 'status', header: 'Status', accessorFn: (r) => statusLabel(r.name) },
-  { id: 'snapshot_count', header: 'Snapshots', accessorFn: (r) => checkMap.value[r.name]?.snapshot_count ?? -1 },
-  { id: 'size', header: 'Size', accessorFn: (r) => checkMap.value[r.name]?.size_in_bytes ?? -1 },
-  { id: 'actions', header: 'Actions', sortable: false },
+  { id: 'status', header: 'Status', accessorFn: (r) => statusLabel(r.name), class: 'whitespace-nowrap' },
+  { id: 'snapshot_count', header: 'Snapshots', accessorFn: (r) => checkMap.value[r.name]?.snapshot_count ?? -1, class: 'whitespace-nowrap' },
+  { id: 'size', header: 'Size', accessorFn: (r) => checkMap.value[r.name]?.size_in_bytes ?? -1, class: 'whitespace-nowrap' },
+  { id: 'actions', header: 'Actions', sortable: false, class: 'whitespace-nowrap' },
 ]
 
 function locationOf(repo: RepositoryEntry): string {

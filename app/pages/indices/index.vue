@@ -140,8 +140,8 @@
           </template>
           <template #actions-cell="{ row }">
             <div class="flex flex-wrap items-center gap-1">
-              <UButton size="xs" color="neutral" variant="outline" icon="i-lucide-list-tree" @click="viewBackingIndices(row.original)">
-                View Backing Indices
+              <UButton size="xs" color="neutral" variant="outline" icon="i-lucide-list-tree" title="View Backing Indices" @click="viewBackingIndices(row.original)">
+                Backing
               </UButton>
               <UButton size="xs" color="primary" variant="outline" icon="i-lucide-rotate-cw" @click="rolloverDataStream(row.original.name)">
                 Rollover
@@ -324,26 +324,26 @@ const chartData = computed(() => {
 
 const columns: CerebroColumnDef<OverviewIndex>[] = [
   { id: 'name', header: 'Name', accessorKey: 'name' },
-  { id: 'status', header: 'Status', accessorFn: (r) => r.closed ? 'closed' : r.status },
-  { id: 'shards', header: 'Shards', accessorFn: (r) => r.num_shards },
-  { id: 'doc_count', header: 'Docs', accessorFn: (r) => r.doc_count ?? 0 },
-  { id: 'deleted_docs', header: 'Deleted', accessorFn: (r) => r.deleted_docs ?? 0 },
-  { id: 'size_in_bytes', header: 'Primary Size', accessorFn: (r) => r.size_in_bytes ?? 0 },
-  { id: 'total_size_in_bytes', header: 'Total Size', accessorFn: (r) => r.total_size_in_bytes ?? 0 },
+  { id: 'status', header: 'Status', accessorFn: (r) => r.closed ? 'closed' : r.status, class: 'whitespace-nowrap w-px' },
+  { id: 'shards', header: 'Shards', accessorFn: (r) => r.num_shards, class: 'whitespace-nowrap w-px' },
+  { id: 'doc_count', header: 'Docs', accessorFn: (r) => r.doc_count ?? 0, class: 'whitespace-nowrap w-px' },
+  { id: 'deleted_docs', header: 'Deleted', accessorFn: (r) => r.deleted_docs ?? 0, class: 'whitespace-nowrap w-px' },
+  { id: 'size_in_bytes', header: 'Primary Size', accessorFn: (r) => r.size_in_bytes ?? 0, class: 'whitespace-nowrap w-px' },
+  { id: 'total_size_in_bytes', header: 'Total Size', accessorFn: (r) => r.total_size_in_bytes ?? 0, class: 'whitespace-nowrap w-px' },
   { id: 'aliases', header: 'Aliases', accessorFn: (r) => (r.aliases || []).join(', ') },
-  { id: 'actions', header: 'Actions', sortable: false },
+  { id: 'actions', header: 'Actions', sortable: false, class: 'w-px' },
 ]
 
 const dataStreamColumns: CerebroColumnDef<DataStreamSummary>[] = [
   { id: 'name', header: 'Name', accessorKey: 'name' },
-  { id: 'status', header: 'Status', accessorKey: 'status' },
-  { id: 'generation', header: 'Generation', accessorFn: (d) => d.generation ?? 0 },
+  { id: 'status', header: 'Status', accessorKey: 'status', class: 'whitespace-nowrap w-px' },
+  { id: 'generation', header: 'Generation', accessorFn: (d) => d.generation ?? 0, class: 'whitespace-nowrap w-px' },
   { id: 'write_index', header: 'Write Index', accessorKey: 'write_index' },
-  { id: 'backing', header: 'Backing Indices', accessorFn: (d) => (d.backing_indices || []).length },
+  { id: 'backing', header: 'Backing Indices', accessorFn: (d) => (d.backing_indices || []).length, class: 'whitespace-nowrap w-px' },
   { id: 'template', header: 'Template', accessorKey: 'template' },
-  { id: 'doc_count', header: 'Docs', accessorFn: (d) => d.doc_count ?? 0 },
-  { id: 'total_size_in_bytes', header: 'Total Size', accessorFn: (d) => d.total_size_in_bytes ?? 0 },
-  { id: 'actions', header: 'Actions', sortable: false },
+  { id: 'doc_count', header: 'Docs', accessorFn: (d) => d.doc_count ?? 0, class: 'whitespace-nowrap w-px' },
+  { id: 'total_size_in_bytes', header: 'Total Size', accessorFn: (d) => d.total_size_in_bytes ?? 0, class: 'whitespace-nowrap w-px' },
+  { id: 'actions', header: 'Actions', sortable: false, class: 'w-px' },
 ]
 
 function dataStreamStatusColor(status: string) {
