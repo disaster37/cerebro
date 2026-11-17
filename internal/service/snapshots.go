@@ -26,6 +26,9 @@ func (s *SnapshotsService) Get(ctx context.Context, req domain.CerebroRequest) (
 	if err != nil {
 		return domain.ErrorResponse(502, err.Error()), nil
 	}
+	if !reposResp.IsSuccess() {
+		return *reposResp, nil
+	}
 	idx, _ := domain.SnapshotIndices(indicesResp.Body)
 	repos, _ := domain.SnapshotRepoList(reposResp.Body)
 	body, _ := json.Marshal(map[string]json.RawMessage{
@@ -71,6 +74,11 @@ func (s *SnapshotsService) Create(ctx context.Context, req domain.CerebroRequest
 	return forward(s.snapshots.CreateSnapshot(repository, snapshot, ignoreUnavailable, includeGlobalState, indices, ctx, req.Target))
 }
 
+func boolOpt(req domain.CerebroRequest, name string) bool {
+	v, _ := req.GetBool(name)
+	return v
+}
+
 func (s *SnapshotsService) Restore(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
 	repository, err := req.Get("repository")
 	if err != nil {
@@ -80,11 +88,16 @@ func (s *SnapshotsService) Restore(ctx context.Context, req domain.CerebroReques
 	if err != nil {
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
-	renamePattern := req.GetOpt("renamePattern")
-	renameReplacement := req.GetOpt("renameReplacement")
-	indices := strings.Join(req.GetStringArray("indices"), ",")
-	ignoreUnavailable, _ := req.GetBool("ignoreUnavailable")
-	includeAliases, _ := req.GetBool("includeAliases")
-	includeGlobalState, _ := req.GetBool("includeGlobalState")
-	return forward(s.snapshots.RestoreSnapshot(repository, snapshot, renamePattern, renameReplacement, ignoreUnavailable, includeAliases, includeGlobalState, indices, ctx, req.Target))
+	opts := domain.RestoreSnapshotOptions{
+		Indices:             strings.Join(req.GetStringArray("indices"), ","),
+		RenamePattern:       req.GetOpt("renamePattern"),
+		RenameReplacement:   req.GetOpt("renameReplacement"),
+		IgnoreUnavailable:   boolOpt(req, "ignoreUnavailable"),
+		IncludeAliases:      boolOpt(req, "includeAliases"),
+		IncludeGlobalState:  boolOpt(req, "includeGlobalState"),
+		Partial:             boolOpt(req, "partial"),
+		IndexSettings:       req.GetObjOpt("indexSettings"),
+		IgnoreIndexSettings: req.GetStringArray("ignoreIndexSettings"),
+	}
+	return forward(s.snapshots.RestoreSnapshot(repository, snapshot, opts, ctx, req.Target))
 }

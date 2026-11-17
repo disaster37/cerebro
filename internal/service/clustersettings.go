@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	"cerebro/internal/domain"
 )
@@ -23,5 +24,20 @@ func (s *ClusterSettingsService) Save(ctx context.Context, req domain.CerebroReq
 	if err != nil {
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
+
+	current, err := s.cluster.GetClusterSettingsFlat(ctx, req.Target)
+	if err != nil {
+		return domain.ErrorResponse(502, err.Error()), nil
+	}
+	if current.IsSuccess() {
+		unknown, verr := domain.ValidateClusterSettingsPayload(settings, current.Body)
+		if verr != nil {
+			return domain.ErrorResponse(400, verr.Error()), nil
+		}
+		if len(unknown) > 0 {
+			return domain.ErrorResponse(400, "Unknown cluster setting parameter(s): "+strings.Join(unknown, ", ")), nil
+		}
+	}
+
 	return forward(s.cluster.SaveClusterSettings(settings, ctx, req.Target))
 }

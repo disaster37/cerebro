@@ -16,7 +16,7 @@ func Aliases(in json.RawMessage) (json.RawMessage, error) {
 		IndexRouting  json.RawMessage `json:"index_routing"`
 	}
 
-	var out []entry
+	out := make([]entry, 0)
 	for index, v := range raw {
 		var info struct {
 			Aliases map[string]json.RawMessage `json:"aliases"`

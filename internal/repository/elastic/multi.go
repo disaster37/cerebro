@@ -173,6 +173,10 @@ func (m *MultiClient) ClusterState(ctx context.Context, target domain.ElasticSer
 	return m.engine(ctx, target).ClusterState(ctx, target)
 }
 
+func (m *MultiClient) ClusterStateMetrics(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).ClusterStateMetrics(ctx, target)
+}
+
 func (m *MultiClient) IndicesStats(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).IndicesStats(ctx, target)
 }
@@ -305,6 +309,18 @@ func (m *MultiClient) DeleteTemplate(name string, ctx context.Context, target do
 	return m.engine(ctx, target).DeleteTemplate(name, ctx, target)
 }
 
+func (m *MultiClient) GetComposableTemplates(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).GetComposableTemplates(ctx, target)
+}
+
+func (m *MultiClient) CreateComposableTemplate(name string, template json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).CreateComposableTemplate(name, template, ctx, target)
+}
+
+func (m *MultiClient) DeleteComposableTemplate(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).DeleteComposableTemplate(name, ctx, target)
+}
+
 func (m *MultiClient) GetNodes(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).GetNodes(ctx, target)
 }
@@ -345,8 +361,16 @@ func (m *MultiClient) CreateSnapshot(repository, snapshot string, ignoreUnavaila
 	return m.engine(ctx, target).CreateSnapshot(repository, snapshot, ignoreUnavailable, includeGlobalState, indices, ctx, target)
 }
 
-func (m *MultiClient) RestoreSnapshot(repository, snapshot string, renamePattern, renameReplacement string, ignoreUnavailable, includeAliases, includeGlobalState bool, indices string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return m.engine(ctx, target).RestoreSnapshot(repository, snapshot, renamePattern, renameReplacement, ignoreUnavailable, includeAliases, includeGlobalState, indices, ctx, target)
+func (m *MultiClient) RestoreSnapshot(repository, snapshot string, opts domain.RestoreSnapshotOptions, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).RestoreSnapshot(repository, snapshot, opts, ctx, target)
+}
+
+func (m *MultiClient) VerifyRepository(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).VerifyRepository(name, ctx, target)
+}
+
+func (m *MultiClient) GetSnapshotStatus(repository, snapshot string, ignoreUnavailable bool, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).GetSnapshotStatus(repository, snapshot, ignoreUnavailable, ctx, target)
 }
 
 func (m *MultiClient) SaveClusterSettings(settings json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
@@ -367,4 +391,36 @@ func (m *MultiClient) CatMaster(ctx context.Context, target domain.ElasticServer
 
 func (m *MultiClient) ExecuteRequest(method, path string, data json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return m.engine(ctx, target).ExecuteRequest(method, path, data, ctx, target)
+}
+
+func (m *MultiClient) GetIndexLifecyclePolicies(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).GetIndexLifecyclePolicies(ctx, target)
+}
+
+func (m *MultiClient) ExplainIndexLifecycle(indexPattern string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).ExplainIndexLifecycle(indexPattern, ctx, target)
+}
+
+func (m *MultiClient) RetryIndexLifecycle(indices []string, state string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).RetryIndexLifecycle(indices, state, ctx, target)
+}
+
+func (m *MultiClient) GetIndexLifecycleStatus(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).GetIndexLifecycleStatus(ctx, target)
+}
+
+func (m *MultiClient) SetIndexLifecycleRunning(start bool, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).SetIndexLifecycleRunning(start, ctx, target)
+}
+
+func (m *MultiClient) GetSnapshotLifecyclePolicies(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).GetSnapshotLifecyclePolicies(ctx, target)
+}
+
+func (m *MultiClient) ExplainSnapshotLifecyclePolicies(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).ExplainSnapshotLifecyclePolicies(ctx, target)
+}
+
+func (m *MultiClient) ExecuteOrToggleSnapshotPolicy(policyID, action string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return m.engine(ctx, target).ExecuteOrToggleSnapshotPolicy(policyID, action, ctx, target)
 }

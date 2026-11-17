@@ -17,3 +17,7 @@ func (h *Handlers) RepositoriesSave(ctx context.Context, c *app.RequestContext) 
 func (h *Handlers) RepositoriesDelete(ctx context.Context, c *app.RequestContext) {
 	h.process(ctx, c, h.Repositories.Delete)
 }
+
+func (h *Handlers) RepositoriesVerify(ctx context.Context, c *app.RequestContext) {
+	h.process(ctx, c, h.Repositories.Verify)
+}

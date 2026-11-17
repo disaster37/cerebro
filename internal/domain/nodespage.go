@@ -1,24 +1,32 @@
 package domain
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sort"
+)
 
 type NodePageEntry struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Host          string   `json:"host"`
-	IP            string   `json:"ip"`
-	CurrentMaster bool     `json:"current_master"`
-	Master        bool     `json:"master"`
-	Data          bool     `json:"data"`
-	Coordinating  bool     `json:"coordinating"`
-	Ingest        bool     `json:"ingest"`
-	ESVersion     string   `json:"es_version"`
-	JVMVersion    string   `json:"jvm_version"`
-	LoadAverage   float64  `json:"load_average"`
-	AvailableProc int      `json:"available_processors"`
-	CPUPercent    int      `json:"cpu_percent"`
-	Heap          heapInfo `json:"heap"`
-	Disk          diskInfo `json:"disk"`
+	ID                string            `json:"id"`
+	Name              string            `json:"name"`
+	Host              string            `json:"host"`
+	IP                string            `json:"ip"`
+	CurrentMaster     bool              `json:"current_master"`
+	Master            bool              `json:"master"`
+	Data              bool              `json:"data"`
+	Coordinating      bool              `json:"coordinating"`
+	Ingest            bool              `json:"ingest"`
+	ESVersion         string            `json:"es_version"`
+	JVMVersion        string            `json:"jvm_version"`
+	LoadAverage       *float64          `json:"load_average"`
+	LoadAverage5m     *float64          `json:"load_average_5m,omitempty"`
+	LoadAverage15m    *float64          `json:"load_average_15m,omitempty"`
+	AvailableProc     int               `json:"available_processors"`
+	CPUPercent        int               `json:"cpu_percent"`
+	ProcessCPUPercent int               `json:"process_cpu_percent"`
+	UptimeInMillis    int64             `json:"uptime_in_millis"`
+	Attributes        map[string]string `json:"attributes"`
+	Heap              heapInfo          `json:"heap"`
+	Disk              diskInfo          `json:"disk"`
 }
 
 type heapInfo struct {
@@ -40,7 +48,7 @@ func resolveRole(dataRoles map[string]bool, roles []string) roleFlags {
 	r := roleFlags{}
 	for _, role := range roles {
 		switch role {
-		case "master":
+		case "master", "cluster_manager":
 			r.master = true
 		case "ingest":
 			r.ingest = true
@@ -74,21 +82,23 @@ func NodesData(info, stats, master json.RawMessage) (json.RawMessage, error) {
 
 	dataRoles := map[string]bool{
 		"data": true, "data_content": true, "data_hot": true,
-		"data_warm": true, "data_cold": true,
+		"data_warm": true, "data_cold": true, "data_frozen": true, "search": true,
 	}
 
-	var out []NodePageEntry
+	out := make([]NodePageEntry, 0, len(infoShape.Nodes))
 	for id := range infoShape.Nodes {
 		out = append(out, buildPageNode(id, masterID, dataRoles, infoShape.Nodes[id], statsShape.Nodes[id]))
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return json.Marshal(out)
 }
 
 func buildPageNode(id, masterID string, dataRoles map[string]bool, infoRaw, statsRaw json.RawMessage) NodePageEntry {
 	var is struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
-		JVM     struct {
+		Name       string            `json:"name"`
+		Version    string            `json:"version"`
+		Attributes map[string]string `json:"attributes"`
+		JVM        struct {
 			Version string `json:"version"`
 		} `json:"jvm"`
 		OS struct {
@@ -102,7 +112,12 @@ func buildPageNode(id, masterID string, dataRoles map[string]bool, infoRaw, stat
 		Roles []string `json:"roles"`
 		OS    struct {
 			CPU struct {
-				Percent int `json:"percent"`
+				Percent     int `json:"percent"`
+				LoadAverage struct {
+					OneM     *float64 `json:"1m"`
+					FiveM    *float64 `json:"5m"`
+					FifteenM *float64 `json:"15m"`
+				} `json:"load_average"`
 			} `json:"cpu"`
 		} `json:"os"`
 		Process struct {
@@ -111,7 +126,8 @@ func buildPageNode(id, masterID string, dataRoles map[string]bool, infoRaw, stat
 			} `json:"cpu"`
 		} `json:"process"`
 		JVM struct {
-			Mem struct {
+			UptimeInMillis int64 `json:"uptime_in_millis"`
+			Mem            struct {
 				HeapUsedInBytes      int64   `json:"heap_used_in_bytes"`
 				HeapCommittedInBytes int64   `json:"heap_committed_in_bytes"`
 				HeapUsedPercent      float64 `json:"heap_used_percent"`
@@ -120,11 +136,11 @@ func buildPageNode(id, masterID string, dataRoles map[string]bool, infoRaw, stat
 		} `json:"jvm"`
 		FS struct {
 			Total struct {
-				TotalInBytes int64 `json:"total_in_bytes"`
-				FreeInBytes  int64 `json:"free_in_bytes"`
+				TotalInBytes     int64 `json:"total_in_bytes"`
+				FreeInBytes      int64 `json:"free_in_bytes"`
+				AvailableInBytes int64 `json:"available_in_bytes"`
 			} `json:"total"`
 		} `json:"fs"`
-		LoadAverage []float64 `json:"os.cpu.load_average"`
 	}
 	_ = json.Unmarshal(infoRaw, &is)
 	_ = json.Unmarshal(statsRaw, &ss)
@@ -133,29 +149,46 @@ func buildPageNode(id, masterID string, dataRoles map[string]bool, infoRaw, stat
 
 	diskPct := 0
 	if ss.FS.Total.TotalInBytes > 0 {
-		diskPct = 100 - int(100*float64(ss.FS.Total.FreeInBytes)/float64(ss.FS.Total.TotalInBytes))
+		available := ss.FS.Total.AvailableInBytes
+		if available == 0 {
+			available = ss.FS.Total.FreeInBytes
+		}
+		diskPct = 100 - int(100*float64(available)/float64(ss.FS.Total.TotalInBytes))
 	}
 
-	load := 0.0
-	if len(ss.LoadAverage) > 0 {
-		load = ss.LoadAverage[0]
+	cpuPercent := ss.OS.CPU.Percent
+	if cpuPercent == 0 && ss.Process.CPU.Percent > 0 {
+		cpuPercent = ss.Process.CPU.Percent
+	}
+
+	attributes := map[string]string{}
+	for k, v := range is.Attributes {
+		if internalNodeAttributes[k] {
+			continue
+		}
+		attributes[k] = v
 	}
 
 	return NodePageEntry{
-		ID:            id,
-		Name:          ss.Name,
-		Host:          ss.Host,
-		IP:            ss.IP,
-		CurrentMaster: id == masterID,
-		Master:        roles.master,
-		Data:          roles.data,
-		Coordinating:  roles.coordinating,
-		Ingest:        roles.ingest,
-		ESVersion:     is.Version,
-		JVMVersion:    is.JVM.Version,
-		LoadAverage:   load,
-		AvailableProc: is.OS.AvailableProcessors,
-		CPUPercent:    ss.Process.CPU.Percent,
+		ID:                id,
+		Name:              ss.Name,
+		Host:              ss.Host,
+		IP:                ss.IP,
+		CurrentMaster:     id == masterID,
+		Master:            roles.master,
+		Data:              roles.data,
+		Coordinating:      roles.coordinating,
+		Ingest:            roles.ingest,
+		ESVersion:         is.Version,
+		JVMVersion:        is.JVM.Version,
+		LoadAverage:       ss.OS.CPU.LoadAverage.OneM,
+		LoadAverage5m:     ss.OS.CPU.LoadAverage.FiveM,
+		LoadAverage15m:    ss.OS.CPU.LoadAverage.FifteenM,
+		AvailableProc:     is.OS.AvailableProcessors,
+		CPUPercent:        cpuPercent,
+		ProcessCPUPercent: ss.Process.CPU.Percent,
+		UptimeInMillis:    ss.JVM.UptimeInMillis,
+		Attributes:        attributes,
 		Heap: heapInfo{
 			Used:        ss.JVM.Mem.HeapUsedInBytes,
 			Committed:   ss.JVM.Mem.HeapCommittedInBytes,

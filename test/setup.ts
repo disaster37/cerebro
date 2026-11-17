@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { ref } from 'vue'
+import { computed, h, reactive, ref } from 'vue'
 import { config } from '@vue/test-utils'
 
 const states = new Map<string, any>()
@@ -11,6 +11,21 @@ const states = new Map<string, any>()
 
 ;(globalThis as any).$fetch = vi.fn()
 ;(globalThis as any).navigateTo = vi.fn()
+
+const colorModeState = reactive({ value: 'dark', preference: 'dark', forced: false })
+;(globalThis as any).useColorMode = () => colorModeState
+;(globalThis as any).useRoute = () => ({ query: {} })
+
+vi.mock('vue-chartjs', () => ({
+  Doughnut: {
+    props: ['data', 'options'],
+    template: '<div class="chart-doughnut" :data-chart="JSON.stringify(data)" :data-options="JSON.stringify(options)" />',
+  },
+  Bar: {
+    props: ['data', 'options'],
+    template: '<div class="chart-bar" :data-chart="JSON.stringify(data)" :data-options="JSON.stringify(options)" />',
+  },
+}))
 
 export const nuxtUiStubs = {
   UCard: {
@@ -26,7 +41,8 @@ export const nuxtUiStubs = {
     emits: ['update:open'],
     template: `<div class="ualert" :data-color="color" :data-variant="variant">
       <div v-if="title" class="ualert-title">{{ title }}</div>
-      <div v-if="description" class="ualert-desc">{{ description }}</div>
+      <div v-if="$slots.description" class="ualert-desc"><slot name="description" /></div>
+      <div v-else-if="description" class="ualert-desc">{{ description }}</div>
       <slot />
       <button v-if="close" type="button" class="ualert-close" @click="$emit('update:open', false)">x</button>
     </div>`,
@@ -41,9 +57,15 @@ export const nuxtUiStubs = {
   },
   UInput: {
     inheritAttrs: false,
-    props: ['modelValue', 'value', 'size'],
+    props: ['modelValue', 'value', 'size', 'icon', 'placeholder'],
     emits: ['update:modelValue'],
-    template: `<input v-bind="$attrs" :value="modelValue ?? value ?? ''" @input="$emit('update:modelValue', $event.target.value)" />`,
+    template: `<input v-bind="$attrs" :value="modelValue ?? value ?? ''" :placeholder="placeholder" @input="$emit('update:modelValue', $event.target.value)" />`,
+  },
+  UTextarea: {
+    inheritAttrs: false,
+    props: ['modelValue', 'rows'],
+    emits: ['update:modelValue'],
+    template: `<textarea v-bind="$attrs" :value="modelValue ?? ''" @input="$emit('update:modelValue', $event.target.value)" />`,
   },
   USelect: {
     inheritAttrs: false,
@@ -74,10 +96,20 @@ export const nuxtUiStubs = {
       <p v-if="description" class="ucheckbox-description">{{ description }}</p>
     </div>`,
   },
+  USwitch: {
+    inheritAttrs: false,
+    props: ['modelValue', 'label', 'description'],
+    emits: ['update:modelValue'],
+    template: `<label class="uswitch">
+      <input v-bind="$attrs" type="checkbox" :checked="Boolean(modelValue)" @change="$emit('update:modelValue', $event.target.checked)" />
+      <span v-if="label">{{ label }}</span>
+    </label>`,
+  },
   UButton: {
     props: ['to', 'type', 'color', 'variant', 'size', 'icon', 'block', 'loading', 'disabled'],
+    emits: ['click'],
     template: `<a v-if="to" :href="to" class="ubutton"><slot /></a>
-      <button v-else :type="type || 'button'" :disabled="disabled || loading" class="ubutton"><slot /></button>`,
+      <button v-else :type="type || 'button'" :disabled="disabled || loading" class="ubutton" @click="$emit('click', $event)"><slot /></button>`,
   },
   UBadge: {
     props: ['color', 'variant'],
@@ -95,19 +127,118 @@ export const nuxtUiStubs = {
     props: ['items', 'content'],
     template: `<div class="udropdown"><slot /></div>`,
   },
+  UProgress: {
+    props: ['modelValue', 'size', 'color'],
+    template: `<div class="uprogress" :data-value="modelValue" :data-color="color" />`,
+  },
+  UTooltip: {
+    props: ['text'],
+    template: `<span class="utooltip" :title="text"><slot /></span>`,
+  },
+  UModal: {
+    props: ['open', 'title', 'modelValue'],
+    emits: ['update:open'],
+    template: `<div v-if="open || modelValue" class="umodal">
+      <div class="umodal-header"><slot name="header" /></div>
+      <div class="umodal-body"><slot name="body" /><slot /></div>
+      <div class="umodal-footer"><slot name="footer" /></div>
+    </div>`,
+  },
+  UTabs: {
+    props: ['items', 'modelValue'],
+    emits: ['update:modelValue'],
+    template: `<div class="utabs">
+      <div class="utabs-list">
+        <button v-for="item in (items || [])" :key="item.value || item.label" class="utabs-tab" @click="$emit('update:modelValue', item.value)">
+          {{ item.label }}<slot :name="'badge-' + (item.value || item.label)" />
+        </button>
+      </div>
+      <div class="utabs-body"><slot /></div>
+    </div>`,
+  },
+  UColorModeSwitch: {
+    props: ['size'],
+    template: `<button class="ucolormode-switch" data-testid="color-mode-toggle" @click="toggle">mode</button>`,
+    setup() {
+      return {
+        toggle() {
+          colorModeState.value = colorModeState.value === 'dark' ? 'light' : 'dark'
+        },
+      }
+    },
+  },
+  UColorModeButton: {
+    props: ['size'],
+    template: `<button class="ucolormode-button" data-testid="color-mode-toggle" @click="toggle">mode</button>`,
+    setup() {
+      return {
+        toggle() {
+          colorModeState.value = colorModeState.value === 'dark' ? 'light' : 'dark'
+        },
+      }
+    },
+  },
+  ClientOnly: {
+    template: `<div class="client-only"><slot /></div>`,
+  },
   UTable: {
-    props: ['data', 'columns'],
-    template: `<table class="utable">
-      <tbody>
-        <tr v-for="(item, rIdx) in (data || [])" :key="rIdx">
-          <td v-for="(col, cIdx) in (columns || [])" :key="col.id || col.accessorKey || cIdx">
-            <slot :name="(col.id || col.accessorKey) + '-cell'" :row="{ original: item }">
-              {{ col.cell ? col.cell({ row: { original: item } }) : item[col.accessorKey] }}
-            </slot>
-          </td>
-        </tr>
-      </tbody>
-    </table>`,
+    props: ['data', 'columns', 'sorting', 'globalFilter', 'loading', 'empty'],
+    emits: ['update:sorting', 'update:globalFilter', 'select'],
+    setup(props: any, { slots, emit }: any) {
+      const rows = computed(() => {
+        let data = [...(props.data || [])]
+        if (props.globalFilter) {
+          const query = String(props.globalFilter).toLowerCase()
+          data = data.filter((row: any) => JSON.stringify(row).toLowerCase().includes(query))
+        }
+        const sorting = props.sorting || []
+        if (sorting.length) {
+          const sort = sorting[0]
+          const col = (props.columns || []).find((c: any) => (c.id || c.accessorKey) === sort.id)
+          if (col) {
+            data.sort((a: any, b: any) => {
+              const av = col.accessorFn ? col.accessorFn(a) : a[col.accessorKey]
+              const bv = col.accessorFn ? col.accessorFn(b) : b[col.accessorKey]
+              if (av === bv) return 0
+              const cmp = av > bv ? 1 : -1
+              return sort.desc ? -cmp : cmp
+            })
+          }
+        }
+        return data
+      })
+
+      function headerFor(col: any) {
+        if (typeof col.header !== 'function') return col.header
+        const id = col.id || col.accessorKey
+        return col.header({
+          column: {
+            getIsSorted: () => {
+              const sort = (props.sorting || []).find((s: any) => s.id === id)
+              return sort ? (sort.desc ? 'desc' : 'asc') : false
+            },
+            toggleSorting: (desc: boolean) => {
+              emit('update:sorting', [{ id, desc }])
+            },
+          },
+        })
+      }
+
+      return () => h('table', { class: 'utable' }, [
+        h('thead', {}, [
+          h('tr', {}, (props.columns || []).map((col: any) => h('th', { key: col.id || col.accessorKey }, [headerFor(col)]))),
+        ]),
+        h('tbody', {}, rows.value.map((item: any, rIdx: number) => h('tr', { key: rIdx }, (props.columns || []).map((col: any, cIdx: number) => {
+          const name = `${col.id || col.accessorKey}-cell`
+          const content = slots[name]
+            ? slots[name]({ row: { original: item } })
+            : col.cell
+              ? col.cell({ row: { original: item } })
+              : item[col.accessorKey]
+          return h('td', { key: col.id || col.accessorKey || cIdx }, [content])
+        })))),
+      ])
+    },
   },
 }
 
@@ -123,4 +254,6 @@ config.global.stubs = {
 
 export function resetTestStubs() {
   states.clear()
+  colorModeState.value = 'dark'
+  colorModeState.preference = 'dark'
 }

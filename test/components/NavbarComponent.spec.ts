@@ -82,6 +82,20 @@ describe('NavbarComponent', () => {
     expect(wrapper.find('[data-testid="navbar-logout"]').exists()).toBe(true)
   })
 
+  it('renders the color mode toggle and cluster health indicator', async () => {
+    stubAuthMe({ authEnabled: false })
+    setConnection('')
+    ;(globalThis as any).useState('clusterName').value = 'prod'
+    ;(globalThis as any).useState('clusterStatus').value = 'yellow'
+
+    const wrapper = mountNavbar()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="color-mode-toggle"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="cluster-health-yellow"]').exists()).toBe(true)
+    expect(wrapper.find('header').classes()).toContain('border-amber-500')
+  })
+
   it('logs out and navigates to /login on click', async () => {
     ;(globalThis as any).$fetch.mockImplementation((url: string) => {
       if (url === '/auth/me') {

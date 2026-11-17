@@ -7,7 +7,7 @@ func CommonsIndices(in json.RawMessage) (json.RawMessage, error) {
 	if err := json.Unmarshal(in, &arr); err != nil {
 		return nil, err
 	}
-	var out []string
+	out := make([]string, 0, len(arr))
 	for _, m := range arr {
 		if idx, ok := m["index"]; ok {
 			var s string

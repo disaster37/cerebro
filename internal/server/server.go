@@ -115,12 +115,19 @@ func NewServer(port int, cfg *config.Config, h *handler.Handlers) *server.Hertz 
 	srv.POST("/repositories", h.RepositoriesGet)
 	srv.POST("/repositories/create", h.RepositoriesSave)
 	srv.POST("/repositories/delete", h.RepositoriesDelete)
+	srv.POST("/repositories/verify", h.RepositoriesVerify)
 
 	srv.POST("/snapshots", h.SnapshotsGet)
 	srv.POST("/snapshots/load", h.SnapshotsLoad)
 	srv.POST("/snapshots/create", h.SnapshotsCreate)
 	srv.POST("/snapshots/delete", h.SnapshotsDelete)
 	srv.POST("/snapshots/restore", h.SnapshotsRestore)
+
+	srv.POST("/policies/index_lifecycle", h.PoliciesIndexLifecycle)
+	srv.POST("/policies/retry_indices", h.PoliciesRetryIndices)
+	srv.POST("/policies/toggle_engine", h.PoliciesToggleEngine)
+	srv.POST("/policies/snapshot_lifecycle", h.PoliciesSnapshotLifecycle)
+	srv.POST("/policies/snapshot_action", h.PoliciesSnapshotAction)
 
 	srv.POST("/cat", h.CatGet)
 

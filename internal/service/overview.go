@@ -18,8 +18,15 @@ func NewOverviewService(raw domain.RawAPI, cluster domain.ClusterAPI, indices do
 }
 
 func (s *OverviewService) Index(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
+	stateResp, err := s.cluster.ClusterStateMetrics(ctx, req.Target)
+	if err != nil {
+		return domain.ErrorResponse(502, err.Error()), nil
+	}
+	if !stateResp.IsSuccess() {
+		return *stateResp, nil
+	}
+
 	apis := []string{
-		"/_cluster/state/master_node,routing_table,blocks",
 		"/_nodes/stats/jvm,fs,os,process?human=true",
 		"/_stats/docs,store?ignore_unavailable=true",
 		"/_cluster/settings",
@@ -40,7 +47,7 @@ func (s *OverviewService) Index(ctx context.Context, req domain.CerebroRequest) 
 		responses[i] = resp.Body
 	}
 
-	body, err := domain.ClusterOverview(responses[0], responses[1], responses[2], responses[3], responses[4], responses[5], responses[6])
+	body, err := domain.ClusterOverview(stateResp.Body, responses[0], responses[1], responses[2], responses[3], responses[4], responses[5])
 	if err != nil {
 		return domain.ErrorResponse(500, err.Error()), nil
 	}

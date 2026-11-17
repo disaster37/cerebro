@@ -7,6 +7,7 @@ export function useCluster() {
   const trustCertificate = useState<boolean>('trustCertificate', () => false)
   const backendType = useState<string>('backendType', () => '')
   const backendVersion = useState<string>('backendVersion', () => '')
+  const clusterStatus = useState<string>('clusterStatus', () => '')
   const alerts = useState<any[]>('alerts', () => [])
   const lastConnectError = ref<string>('')
   const lastConnectStatus = ref<number>(0)
@@ -42,6 +43,7 @@ export function useCluster() {
       clusterName.value = host
       backendType.value = ''
       backendVersion.value = ''
+      clusterStatus.value = ''
       alerts.value = []
       return true
     }
@@ -60,6 +62,7 @@ export function useCluster() {
       }
       backendType.value = resp.body?.backendType || ''
       backendVersion.value = resp.body?.backendVersion || ''
+      clusterStatus.value = resp.body?.status || ''
     }
   }
 
@@ -69,6 +72,7 @@ export function useCluster() {
     clusterName.value = ''
     backendType.value = ''
     backendVersion.value = ''
+    clusterStatus.value = ''
   }
 
   return {
@@ -76,6 +80,9 @@ export function useCluster() {
     clusterHost,
     clusterName,
     trustCertificate,
+    backendType,
+    backendVersion,
+    clusterStatus,
     lastConnectError,
     lastConnectStatus,
     connect,

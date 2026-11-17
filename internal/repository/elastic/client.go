@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -56,6 +57,14 @@ func (c *Client) BackendInfo(ctx context.Context, target domain.ElasticServer) (
 
 func (c *Client) ClusterState(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	res, err := esapi.ClusterStateRequest{}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) ClusterStateMetrics(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.ClusterStateRequest{Metric: []string{"master_node", "routing_table", "blocks"}}.Do(withTarget(ctx, target), c.es)
 	if err != nil {
 		return nil, err
 	}
@@ -321,6 +330,30 @@ func (c *Client) DeleteTemplate(name string, ctx context.Context, target domain.
 	return toResponse(res.StatusCode, res.Body)
 }
 
+func (c *Client) GetComposableTemplates(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.IndicesGetIndexTemplateRequest{}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) CreateComposableTemplate(name string, template json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.IndicesPutIndexTemplateRequest{Name: name, Body: bytes.NewReader(template)}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) DeleteComposableTemplate(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.IndicesDeleteIndexTemplateRequest{Name: []string{name}}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
 func (c *Client) GetNodes(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	res, err := esapi.CatNodesRequest{Format: "json"}.Do(withTarget(ctx, target), c.es)
 	if err != nil {
@@ -410,13 +443,113 @@ func (c *Client) CreateSnapshot(repository, snapshot string, ignoreUnavailable, 
 	return toResponse(res.StatusCode, res.Body)
 }
 
-func (c *Client) RestoreSnapshot(repository, snapshot string, renamePattern, renameReplacement string, ignoreUnavailable, includeAliases, includeGlobalState bool, indices string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	body := restoreSnapshotBody(renamePattern, renameReplacement, ignoreUnavailable, includeAliases, includeGlobalState, indices)
+func (c *Client) RestoreSnapshot(repository, snapshot string, opts domain.RestoreSnapshotOptions, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	body := restoreSnapshotBody(opts)
 	res, err := esapi.SnapshotRestoreRequest{
 		Repository: repository,
 		Snapshot:   snapshot,
 		Body:       stringsReader(body),
 	}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) VerifyRepository(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.SnapshotVerifyRepositoryRequest{Repository: name}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) GetSnapshotStatus(repository, snapshot string, ignoreUnavailable bool, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	req := esapi.SnapshotStatusRequest{Repository: repository}
+	if snapshot != "" {
+		req.Snapshot = []string{snapshot}
+	}
+	if ignoreUnavailable {
+		t := true
+		req.IgnoreUnavailable = &t
+	}
+	res, err := req.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) GetIndexLifecyclePolicies(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.ILMGetLifecycleRequest{}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) ExplainIndexLifecycle(indexPattern string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	path := "/" + escapeIndexPattern(indexPattern) + "/_ilm/explain?only_managed=true&allow_no_indices=true&expand_wildcards=all"
+	return c.ExecuteRequest(http.MethodGet, path, nil, ctx, target)
+}
+
+func (c *Client) RetryIndexLifecycle(indices []string, state string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	path := "/" + escapeIndexList(indices) + "/_ilm/retry"
+	return c.ExecuteRequest(http.MethodPost, path, nil, ctx, target)
+}
+
+func (c *Client) GetIndexLifecycleStatus(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.ILMGetStatusRequest{}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) SetIndexLifecycleRunning(start bool, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	var res *esapi.Response
+	var err error
+	if start {
+		res, err = esapi.ILMStartRequest{}.Do(withTarget(ctx, target), c.es)
+	} else {
+		res, err = esapi.ILMStopRequest{}.Do(withTarget(ctx, target), c.es)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) GetSnapshotLifecyclePolicies(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.SlmGetLifecycleRequest{}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) ExplainSnapshotLifecyclePolicies(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	res, err := esapi.SlmGetStatusRequest{}.Do(withTarget(ctx, target), c.es)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(res.StatusCode, res.Body)
+}
+
+func (c *Client) ExecuteOrToggleSnapshotPolicy(policyID, action string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	var res *esapi.Response
+	var err error
+	switch action {
+	case "execute":
+		res, err = esapi.SlmExecuteLifecycleRequest{PolicyID: policyID}.Do(withTarget(ctx, target), c.es)
+	case "start":
+		res, err = esapi.SlmStartRequest{}.Do(withTarget(ctx, target), c.es)
+	case "stop":
+		res, err = esapi.SlmStopRequest{}.Do(withTarget(ctx, target), c.es)
+	default:
+		resp := domain.ErrorResponse(400, "unsupported snapshot policy action: "+action)
+		return &resp, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -531,19 +664,44 @@ func createSnapshotBody(ignoreUnavailable, includeGlobalState bool, indices stri
 	return body
 }
 
-func restoreSnapshotBody(renamePattern, renameReplacement string, ignoreUnavailable, includeAliases, includeGlobalState bool, indices string) string {
-	body := fmt.Sprintf(`{"ignore_unavailable":%t,"include_global_state":%t,"include_aliases":%t`, ignoreUnavailable, includeGlobalState, includeAliases)
-	if indices != "" {
-		body += `,"indices":` + jsonStr(indices)
+func restoreSnapshotBody(opts domain.RestoreSnapshotOptions) string {
+	body := fmt.Sprintf(`{"ignore_unavailable":%t,"include_global_state":%t,"include_aliases":%t`, opts.IgnoreUnavailable, opts.IncludeGlobalState, opts.IncludeAliases)
+	if opts.Indices != "" {
+		body += `,"indices":` + jsonStr(opts.Indices)
 	}
-	if renamePattern != "" {
-		body += `,"rename_pattern":` + jsonStr(renamePattern)
+	if opts.RenamePattern != "" {
+		body += `,"rename_pattern":` + jsonStr(opts.RenamePattern)
 	}
-	if renameReplacement != "" {
-		body += `,"rename_replacement":` + jsonStr(renameReplacement)
+	if opts.RenameReplacement != "" {
+		body += `,"rename_replacement":` + jsonStr(opts.RenameReplacement)
+	}
+	if opts.Partial {
+		body += `,"partial":true`
+	}
+	if len(opts.IndexSettings) > 0 && string(opts.IndexSettings) != "null" {
+		body += `,"index_settings":` + string(opts.IndexSettings)
+	}
+	if len(opts.IgnoreIndexSettings) > 0 {
+		settings, _ := json.Marshal(opts.IgnoreIndexSettings)
+		body += `,"ignore_index_settings":` + string(settings)
 	}
 	body += "}"
 	return body
+}
+
+// escapeIndexPattern escapes an index pattern for use as a single URL path
+// segment while preserving the wildcard characters ES/OS accept in paths.
+func escapeIndexPattern(pattern string) string {
+	return strings.ReplaceAll(url.PathEscape(pattern), "%2A", "*")
+}
+
+// escapeIndexList escapes a comma-separated index list for a URL path.
+func escapeIndexList(indices []string) string {
+	escaped := make([]string, 0, len(indices))
+	for _, idx := range indices {
+		escaped = append(escaped, escapeIndexPattern(idx))
+	}
+	return strings.Join(escaped, ",")
 }
 
 func analyzeByFieldBody(field, text string) string {

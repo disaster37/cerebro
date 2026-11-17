@@ -296,7 +296,7 @@ func TestOSEngineRequestBuilding(t *testing.T) {
 			return os.CreateSnapshot("repo", "snap", true, false, "idx", ctx, target)
 		}, "PUT", "/_snapshot/repo/snap", "", "", `"ignore_unavailable":true`},
 		{"RestoreSnapshot", func() (*domain.Response, error) {
-			return os.RestoreSnapshot("repo", "snap", "p", "r", true, true, false, "idx", ctx, target)
+			return os.RestoreSnapshot("repo", "snap", domain.RestoreSnapshotOptions{Indices: "idx", RenamePattern: "p", RenameReplacement: "r", IgnoreUnavailable: true, IncludeAliases: true}, ctx, target)
 		}, "POST", "/_snapshot/repo/snap/_restore", "", "", `"rename_pattern":"p"`},
 		{"CatRequest", func() (*domain.Response, error) { return os.CatRequest("indices", ctx, target) }, "GET", "/_cat/indices", "format=json", "", ""},
 		{"ExecuteRequest_json", func() (*domain.Response, error) {
@@ -464,5 +464,125 @@ func TestMultiClientSelfSignedTLSElasticsearch(t *testing.T) {
 	}
 	if bi.Version != "9.4.3" {
 		t.Errorf("BackendInfo.Version = %q, want 9.4.3", bi.Version)
+	}
+}
+
+func TestOSEngineClusterStateMetricsAndCatMasterFallback(t *testing.T) {
+	var rec recordedRequest
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		rec.method = r.Method
+		rec.path = r.URL.EscapedPath()
+		rec.rawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/" {
+			_, _ = w.Write([]byte(`{"version":{"distribution":"opensearch","number":"3.4.0"}}`))
+			return
+		}
+		if strings.Contains(r.URL.Path, "cluster_manager_node") || r.URL.Path == "/_cat/cluster_manager" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":"unsupported"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}
+	srv := httptest.NewServer(http.HandlerFunc(handler))
+	defer srv.Close()
+
+	m, err := NewMultiClient(false)
+	if err != nil {
+		t.Fatalf("NewMultiClient: %v", err)
+	}
+	target := targetFor(srv, "")
+	ctx := context.Background()
+
+	if _, err := m.os.ClusterStateMetrics(ctx, target); err != nil {
+		t.Fatalf("ClusterStateMetrics: %v", err)
+	}
+	if rec.path != "/_cluster/state/master_node,routing_table,blocks" {
+		t.Errorf("fallback path = %q, want master_node metrics", rec.path)
+	}
+
+	if _, err := m.os.CatMaster(ctx, target); err != nil {
+		t.Fatalf("CatMaster: %v", err)
+	}
+	if rec.path != "/_cat/master" {
+		t.Errorf("fallback path = %q, want /_cat/master", rec.path)
+	}
+}
+
+func TestOSEngineNewEndpointPaths(t *testing.T) {
+	var rec recordedRequest
+	srv := newFakeOS(t, &rec)
+	defer srv.Close()
+
+	m, err := NewMultiClient(false)
+	if err != nil {
+		t.Fatalf("NewMultiClient: %v", err)
+	}
+	os := m.os
+	target := targetFor(srv, "")
+	ctx := context.Background()
+
+	cases := []struct {
+		name   string
+		call   func() (*domain.Response, error)
+		method string
+		path   string
+		query  string
+		body   string
+	}{
+		{"ClusterStateMetrics", func() (*domain.Response, error) { return os.ClusterStateMetrics(ctx, target) }, "GET", "/_cluster/state/cluster_manager_node,routing_table,blocks", "", ""},
+		{"CatMaster", func() (*domain.Response, error) { return os.CatMaster(ctx, target) }, "GET", "/_cat/cluster_manager", "format=json", ""},
+		{"GetComposableTemplates", func() (*domain.Response, error) { return os.GetComposableTemplates(ctx, target) }, "GET", "/_index_template", "", ""},
+		{"CreateComposableTemplate", func() (*domain.Response, error) {
+			return os.CreateComposableTemplate("t", json.RawMessage(`{"index_patterns":["*"]}`), ctx, target)
+		}, "PUT", "/_index_template/t", "", `"index_patterns"`},
+		{"DeleteComposableTemplate", func() (*domain.Response, error) { return os.DeleteComposableTemplate("t", ctx, target) }, "DELETE", "/_index_template/t", "", ""},
+		{"VerifyRepository", func() (*domain.Response, error) { return os.VerifyRepository("repo", ctx, target) }, "POST", "/_snapshot/repo/_verify", "", ""},
+		{"GetSnapshotStatus", func() (*domain.Response, error) { return os.GetSnapshotStatus("repo", "_all", true, ctx, target) }, "GET", "/_snapshot/repo/_all/_status", "ignore_unavailable=true", ""},
+		{"GetIndexLifecyclePolicies", func() (*domain.Response, error) { return os.GetIndexLifecyclePolicies(ctx, target) }, "GET", "/_plugins/_ism/policies", "", ""},
+		{"ExplainIndexLifecycle", func() (*domain.Response, error) { return os.ExplainIndexLifecycle("*", ctx, target) }, "GET", "/_plugins/_ism/explain/*", "", ""},
+		{"RetryIndexLifecycle", func() (*domain.Response, error) { return os.RetryIndexLifecycle([]string{"idx"}, "hot", ctx, target) }, "POST", "/_plugins/_ism/retry/idx", "", `"state":"hot"`},
+		{"GetIndexLifecycleStatus", func() (*domain.Response, error) { return os.GetIndexLifecycleStatus(ctx, target) }, "GET", "/_cluster/settings", "flat_settings=true&include_defaults=true", ""},
+		{"SetIndexLifecycleRunning", func() (*domain.Response, error) { return os.SetIndexLifecycleRunning(false, ctx, target) }, "PUT", "/_cluster/settings", "", `"plugins.index_state_management.enabled":false`},
+		{"GetSnapshotLifecyclePolicies", func() (*domain.Response, error) { return os.GetSnapshotLifecyclePolicies(ctx, target) }, "GET", "/_plugins/_sm/policies", "", ""},
+		{"ExplainSnapshotLifecyclePolicies", func() (*domain.Response, error) { return os.ExplainSnapshotLifecyclePolicies(ctx, target) }, "GET", "/_plugins/_sm/policies/*/_explain", "", ""},
+		{"SnapshotPolicyStart", func() (*domain.Response, error) { return os.ExecuteOrToggleSnapshotPolicy("p1", "start", ctx, target) }, "POST", "/_plugins/_sm/policies/p1/_start", "", ""},
+		{"SnapshotPolicyStop", func() (*domain.Response, error) { return os.ExecuteOrToggleSnapshotPolicy("p1", "stop", ctx, target) }, "POST", "/_plugins/_sm/policies/p1/_stop", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec = recordedRequest{}
+			if _, err := tc.call(); err != nil {
+				t.Fatalf("call: %v", err)
+			}
+			if rec.method != tc.method || rec.path != tc.path {
+				t.Errorf("request = %s %s, want %s %s", rec.method, rec.path, tc.method, tc.path)
+			}
+			if tc.query != "" && rec.rawQuery != tc.query {
+				t.Errorf("query = %q, want %q", rec.rawQuery, tc.query)
+			}
+			if tc.body != "" && !strings.Contains(rec.body, tc.body) {
+				t.Errorf("body = %q, want to contain %q", rec.body, tc.body)
+			}
+		})
+	}
+}
+
+func TestESEngineClusterStateMetricsPath(t *testing.T) {
+	var rec recordedRequest
+	srv := newFakeES(t, &rec)
+	defer srv.Close()
+
+	c, err := NewClient(false)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if _, err := c.ClusterStateMetrics(context.Background(), targetFor(srv, "")); err != nil {
+		t.Fatalf("ClusterStateMetrics: %v", err)
+	}
+	if rec.path != "/_cluster/state/master_node,routing_table,blocks" {
+		t.Errorf("path = %q, want master_node metrics", rec.path)
 	}
 }

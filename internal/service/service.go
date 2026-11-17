@@ -31,6 +31,9 @@ func transform(resp *domain.Response, err error, fn func(json.RawMessage) (json.
 	if err != nil {
 		return domain.ErrorResponse(502, err.Error()), nil
 	}
+	if !resp.IsSuccess() {
+		return *resp, nil
+	}
 	body, err := fn(resp.Body)
 	if err != nil {
 		return domain.ErrorResponse(500, err.Error()), nil

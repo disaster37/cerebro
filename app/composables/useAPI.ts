@@ -1,3 +1,5 @@
+import { extractDetailedError } from '../utils/format'
+
 export interface ClusterConnection {
   host: string
   username: string
@@ -19,15 +21,7 @@ export function defaultClusterConnection(): ClusterConnection {
 }
 
 export function extractEnvelopeError(body: any): string {
-  if (!body) return ''
-  if (typeof body === 'string') return body
-  if (typeof body.error === 'string') return body.error
-  if (body.error && typeof body.error === 'object') {
-    if (typeof body.error.reason === 'string') return body.error.reason
-    if (typeof body.error.type === 'string') return body.error.type
-  }
-  if (typeof body.message === 'string') return body.message
-  return ''
+  return extractDetailedError(body)
 }
 
 function pushUniqueAlert(alerts: any[], message: string, type: string) {

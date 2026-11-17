@@ -5,3 +5,92 @@ pre {
   white-space: pre-wrap;
   word-wrap: break-word;
 }
+
+/* Shard allocation badges (overview matrix) */
+.shard-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.shard-badge:hover {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.15);
+}
+.shard-badge--primary {
+  border: 2px solid currentColor;
+}
+.shard-badge--replica {
+  border: 2px dashed currentColor;
+}
+.shard-badge--started {
+  color: #10b981;
+  background: rgb(16 185 129 / 0.16);
+}
+.shard-badge--initializing {
+  color: #38bdf8;
+  background: rgb(56 189 248 / 0.16);
+}
+.shard-badge--relocating {
+  color: #a78bfa;
+  background: rgb(167 139 250 / 0.16);
+}
+.shard-badge--recovering {
+  color: #f59e0b;
+  background: rgb(245 158 11 / 0.16);
+}
+.shard-badge--unassigned {
+  color: #9ca3af;
+  background: rgb(156 163 175 / 0.16);
+}
+
+/* CodeMirror console */
+.cm-console-host {
+  height: 100%;
+  min-height: 320px;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+.cm-console-host .cm-editor {
+  height: 100%;
+  font-size: 13px;
+}
+.cm-console-host .cm-scroller {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: auto;
+}
+.cm-console-host .cm-gutters {
+  border-right: 1px solid rgb(38 38 38 / 0.6);
+}
+.cm-play-gutter {
+  cursor: pointer;
+  color: #10b981;
+  padding: 0 4px;
+}
+.cm-active-request {
+  background: rgb(56 189 248 / 0.08);
+}
+
+/* Resizable split pane */
+.console-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  min-height: 480px;
+}
+.console-split--stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+.console-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
