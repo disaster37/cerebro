@@ -14,7 +14,8 @@ const states = new Map<string, any>()
 
 const colorModeState = reactive({ value: 'dark', preference: 'dark', forced: false })
 ;(globalThis as any).useColorMode = () => colorModeState
-;(globalThis as any).useRoute = () => ({ query: {} })
+const routeState = reactive<{ query: Record<string, any>; path: string }>({ query: {}, path: '/' })
+;(globalThis as any).useRoute = () => routeState
 
 vi.mock('vue-chartjs', () => ({
   Doughnut: {
@@ -43,7 +44,6 @@ export const nuxtUiStubs = {
       <div v-if="title" class="ualert-title">{{ title }}</div>
       <div v-if="$slots.description" class="ualert-desc"><slot name="description" /></div>
       <div v-else-if="description" class="ualert-desc">{{ description }}</div>
-      <slot />
       <button v-if="close" type="button" class="ualert-close" @click="$emit('update:open', false)">x</button>
     </div>`,
   },
@@ -276,4 +276,8 @@ export function resetTestStubs() {
   states.clear()
   colorModeState.value = 'dark'
   colorModeState.preference = 'dark'
+  routeState.query = {}
+  routeState.path = '/'
 }
+
+export { routeState }

@@ -83,6 +83,8 @@ describe('cluster settings page', () => {
     const saveCall = (globalThis as any).$fetch.mock.calls.find((call: any[]) => call[0] === '/cluster_settings/save')
     expect(saveCall).toBeTruthy()
     expect(saveCall[1].body.settings.persistent['cluster.max_shards_per_node']).toBe(4000)
+
+    expect(wrapper.find('[data-testid="cluster-settings-success"]').text()).toContain('Cluster settings saved.')
   })
 
   it('surfaces a save error without wiping staged changes', async () => {

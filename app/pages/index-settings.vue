@@ -99,8 +99,8 @@ async function save() {
   }, { suppressErrorAlert: true })
   saving.value = false
   if (resp?.status === 200) {
-    success.value = true
     await load()
+    success.value = true
   } else {
     error.value = extractEnvelopeError(resp?.body) || `Failed to save index settings (${resp?.status || 'network error'}).`
   }
