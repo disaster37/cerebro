@@ -8,18 +8,27 @@ import (
 )
 
 type OverviewService struct {
-	raw     domain.RawAPI
-	cluster domain.ClusterAPI
-	indices domain.IndexAPI
+	raw         domain.RawAPI
+	cluster     domain.ClusterAPI
+	indices     domain.IndexAPI
+	dataStreams domain.DataStreamAPI
+	nodes       domain.NodeAPI
 }
 
-func NewOverviewService(raw domain.RawAPI, cluster domain.ClusterAPI, indices domain.IndexAPI) *OverviewService {
-	return &OverviewService{raw: raw, cluster: cluster, indices: indices}
+func NewOverviewService(raw domain.RawAPI, cluster domain.ClusterAPI, indices domain.IndexAPI, dataStreams domain.DataStreamAPI, nodes domain.NodeAPI) *OverviewService {
+	return &OverviewService{raw: raw, cluster: cluster, indices: indices, dataStreams: dataStreams, nodes: nodes}
 }
 
 func (s *OverviewService) Index(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
+	stateResp, err := s.cluster.ClusterStateMetrics(ctx, req.Target)
+	if err != nil {
+		return domain.ErrorResponse(502, err.Error()), nil
+	}
+	if !stateResp.IsSuccess() {
+		return *stateResp, nil
+	}
+
 	apis := []string{
-		"/_cluster/state/master_node,routing_table,blocks",
 		"/_nodes/stats/jvm,fs,os,process?human=true",
 		"/_stats/docs,store?ignore_unavailable=true",
 		"/_cluster/settings",
@@ -40,7 +49,25 @@ func (s *OverviewService) Index(ctx context.Context, req domain.CerebroRequest) 
 		responses[i] = resp.Body
 	}
 
-	body, err := domain.ClusterOverview(responses[0], responses[1], responses[2], responses[3], responses[4], responses[5], responses[6])
+	// Data streams are best-effort: restricted users may get 403/404 on
+	// GET /_data_stream, and /overview must still render.
+	var dataStreamsRaw json.RawMessage
+	if s.dataStreams != nil {
+		if dsResp, derr := s.dataStreams.GetDataStreams(ctx, req.Target); derr == nil && dsResp.IsSuccess() {
+			dataStreamsRaw = dsResp.Body
+		}
+	}
+
+	// OpenSearch's cgroup-aware resource tracker is a best-effort secondary
+	// source; Elasticsearch or older/restricted clusters simply fall back.
+	var resourceStatsRaw json.RawMessage
+	if s.nodes != nil {
+		if res, rerr := s.nodes.NodesResourceUsageStats(ctx, req.Target); rerr == nil && res != nil && res.IsSuccess() {
+			resourceStatsRaw = res.Body
+		}
+	}
+
+	body, err := domain.ClusterOverview(stateResp.Body, responses[0], responses[1], responses[2], responses[3], responses[4], responses[5], dataStreamsRaw, resourceStatsRaw)
 	if err != nil {
 		return domain.ErrorResponse(500, err.Error()), nil
 	}
@@ -99,9 +126,10 @@ func (s *OverviewService) GetShardStats(ctx context.Context, req domain.CerebroR
 	if err != nil {
 		return domain.ErrorResponse(400, err.Error()), nil
 	}
-	node, err := req.Get("node")
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
+	node := req.GetOpt("node")
+	primary, _ := req.GetBool("primary")
+	if node == "" || node == "unassigned" {
+		return forward(s.cluster.AllocationExplain(index, shard, primary, ctx, req.Target))
 	}
 	stats, err := s.indices.GetShardStats(index, ctx, req.Target)
 	if err != nil {

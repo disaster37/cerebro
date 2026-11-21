@@ -1,3 +1,5 @@
+import { extractDetailedError } from '../utils/format'
+
 export interface ClusterConnection {
   host: string
   username: string
@@ -19,21 +21,22 @@ export function defaultClusterConnection(): ClusterConnection {
 }
 
 export function extractEnvelopeError(body: any): string {
-  if (!body) return ''
-  if (typeof body === 'string') return body
-  if (typeof body.error === 'string') return body.error
-  if (body.error && typeof body.error === 'object') {
-    if (typeof body.error.reason === 'string') return body.error.reason
-    if (typeof body.error.type === 'string') return body.error.type
-  }
-  if (typeof body.message === 'string') return body.message
-  return ''
+  return extractDetailedError(body)
 }
+
+export type AlertType = 'success' | 'danger' | 'warning' | 'info'
 
 function pushUniqueAlert(alerts: any[], message: string, type: string) {
   if (!alerts.some((a) => a.message === message && a.type === type)) {
     alerts.push({ message, type })
   }
+}
+
+// pushAlert exposes action feedback (success/warning/error) to pages without
+// duplicating the global alert state plumbing.
+export function pushAlert(message: string, type: AlertType = 'info') {
+  const alerts = useState<any[]>('alerts', () => [])
+  pushUniqueAlert(alerts.value, message, type)
 }
 
 export function useAPI() {
@@ -88,6 +91,12 @@ export function useAPI() {
             'Cluster request forbidden (403 Forbidden). Verify that the connected user has sufficient cluster permissions.',
             'danger',
           )
+        } else if (data.status >= 400 && data.status < 500) {
+          pushUniqueAlert(
+            alerts.value,
+            detail ? `Cluster request rejected (${data.status}): ${detail}` : `Cluster request rejected (${data.status}).`,
+            'danger',
+          )
         } else if (data.status >= 500) {
           pushUniqueAlert(
             alerts.value,
@@ -99,10 +108,12 @@ export function useAPI() {
 
       return data
     } catch (err: any) {
-      pushUniqueAlert(alerts.value, err.message || 'Request failed', 'danger')
+      if (!options?.suppressErrorAlert) {
+        pushUniqueAlert(alerts.value, err.message || 'Request failed', 'danger')
+      }
       return null
     }
   }
 
-  return { apiCall }
+  return { apiCall, pushAlert }
 }

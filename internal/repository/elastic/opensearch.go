@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	opensearch "github.com/disaster37/opensearch/v4"
@@ -46,11 +47,10 @@ func (o *osClient) do(ctx context.Context, target domain.ElasticServer,
 	}
 	if body != "" {
 		req.SetBody(body) // string bodies sent verbatim (Content-Length set)
-		if contentType != "" {
-			// Overrides the client-level global Content-Type: application/json
-			// that opensearch.New sets (needed for ndjson/bulk).
-			req.SetHeader("Content-Type", contentType)
+		if contentType == "" {
+			contentType = "application/json"
 		}
+		req.SetHeader("Content-Type", contentType)
 	}
 	resp, err := req.Execute(method, path) // relative path joined to placeholderURL
 	if err != nil {
@@ -73,12 +73,24 @@ func (o *osClient) ClusterState(ctx context.Context, target domain.ElasticServer
 	return o.do(ctx, target, http.MethodGet, "/_cluster/state", nil, "", "")
 }
 
+func (o *osClient) ClusterStateMetrics(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	resp, err := o.do(ctx, target, http.MethodGet, "/_cluster/state/cluster_manager_node,routing_table,blocks", nil, "", "")
+	if err == nil && resp.Status == http.StatusBadRequest {
+		return o.do(ctx, target, http.MethodGet, "/_cluster/state/master_node,routing_table,blocks", nil, "", "")
+	}
+	return resp, err
+}
+
 func (o *osClient) IndicesStats(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return o.do(ctx, target, http.MethodGet, "/_stats", nil, "", "")
 }
 
 func (o *osClient) NodesStats(stats []string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	return o.do(ctx, target, http.MethodGet, "/_nodes/stats/"+strings.Join(stats, ","), nil, "", "")
+}
+
+func (o *osClient) NodesResourceUsageStats(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodGet, "/_nodes/stats/resource_usage_stats", nil, "", "")
 }
 
 func (o *osClient) NodeStats(node string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
@@ -106,31 +118,51 @@ func (o *osClient) Nodes(flags []string, ctx context.Context, target domain.Elas
 }
 
 func (o *osClient) CloseIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_close", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_close", nil, "", "")
 }
 
 func (o *osClient) OpenIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_open", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_open", nil, "", "")
 }
 
 func (o *osClient) RefreshIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_refresh", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_refresh", nil, "", "")
 }
 
 func (o *osClient) FlushIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_flush", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_flush", nil, "", "")
 }
 
 func (o *osClient) ForceMerge(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_forcemerge", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_forcemerge", nil, "", "")
 }
 
 func (o *osClient) ClearIndexCache(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(index)+"/_cache/clear", nil, "", "")
+	return o.do(ctx, target, http.MethodPost, "/"+escapeIndexList(splitIndexList(index))+"/_cache/clear", nil, "", "")
 }
 
 func (o *osClient) DeleteIndex(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodDelete, "/"+url.PathEscape(index), nil, "", "")
+	return o.do(ctx, target, http.MethodDelete, "/"+escapeIndexList(splitIndexList(index)), nil, "", "")
+}
+
+func (o *osClient) AllocationExplain(index string, shard int, primary bool, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodPost, "/_cluster/allocation/explain", nil, allocationExplainBody(index, shard, primary), "")
+}
+
+func (o *osClient) GetDataStreams(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodGet, "/_data_stream", nil, "", "")
+}
+
+func (o *osClient) CreateDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodPut, "/_data_stream/"+url.PathEscape(name), nil, "", "")
+}
+
+func (o *osClient) DeleteDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodDelete, "/_data_stream/"+url.PathEscape(name), nil, "", "")
+}
+
+func (o *osClient) RolloverDataStream(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodPost, "/"+url.PathEscape(name)+"/_rollover", nil, "", "")
 }
 
 func (o *osClient) GetIndexSettings(index string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
@@ -211,6 +243,18 @@ func (o *osClient) DeleteTemplate(name string, ctx context.Context, target domai
 	return o.do(ctx, target, http.MethodDelete, "/_template/"+url.PathEscape(name), nil, "", "")
 }
 
+func (o *osClient) GetComposableTemplates(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodGet, "/_index_template", nil, "", "")
+}
+
+func (o *osClient) CreateComposableTemplate(name string, template json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodPut, "/_index_template/"+url.PathEscape(name), nil, string(template), "")
+}
+
+func (o *osClient) DeleteComposableTemplate(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodDelete, "/_index_template/"+url.PathEscape(name), nil, "", "")
+}
+
 func (o *osClient) GetNodes(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	params := url.Values{}
 	params.Set("format", "json")
@@ -256,8 +300,30 @@ func (o *osClient) CreateSnapshot(repository, snapshot string, ignoreUnavailable
 	return o.do(ctx, target, http.MethodPut, "/_snapshot/"+url.PathEscape(repository)+"/"+url.PathEscape(snapshot), nil, createSnapshotBody(ignoreUnavailable, includeGlobalState, indices), "")
 }
 
-func (o *osClient) RestoreSnapshot(repository, snapshot string, renamePattern, renameReplacement string, ignoreUnavailable, includeAliases, includeGlobalState bool, indices string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodPost, "/_snapshot/"+url.PathEscape(repository)+"/"+url.PathEscape(snapshot)+"/_restore", nil, restoreSnapshotBody(renamePattern, renameReplacement, ignoreUnavailable, includeAliases, includeGlobalState, indices), "")
+func (o *osClient) RestoreSnapshot(repository, snapshot string, opts domain.RestoreSnapshotOptions, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodPost, "/_snapshot/"+url.PathEscape(repository)+"/"+url.PathEscape(snapshot)+"/_restore", nil, restoreSnapshotBody(opts), "")
+}
+
+func (o *osClient) VerifyRepository(name string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodPost, "/_snapshot/"+url.PathEscape(name)+"/_verify", nil, "", "")
+}
+
+func (o *osClient) GetSnapshotStatus(repository, snapshot string, ignoreUnavailable bool, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	path := "/_snapshot/" + url.PathEscape(repository)
+	if snapshot != "" {
+		parts := splitIndexList(snapshot)
+		escaped := make([]string, 0, len(parts))
+		for _, part := range parts {
+			escaped = append(escaped, url.PathEscape(part))
+		}
+		path += "/" + strings.Join(escaped, ",")
+	}
+	path += "/_status"
+	params := url.Values{}
+	if ignoreUnavailable {
+		params.Set("ignore_unavailable", "true")
+	}
+	return o.do(ctx, target, http.MethodGet, path, params, "", "")
 }
 
 func (o *osClient) SaveClusterSettings(settings json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
@@ -277,7 +343,65 @@ func (o *osClient) CatRequest(api string, ctx context.Context, target domain.Ela
 func (o *osClient) CatMaster(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
 	params := url.Values{}
 	params.Set("format", "json")
-	return o.do(ctx, target, http.MethodGet, "/_cat/master", params, "", "")
+	resp, err := o.do(ctx, target, http.MethodGet, "/_cat/cluster_manager", params, "", "")
+	if err == nil && (resp.Status == http.StatusNotFound || resp.Status == http.StatusBadRequest) {
+		return o.do(ctx, target, http.MethodGet, "/_cat/master", params, "", "")
+	}
+	return resp, err
+}
+
+func (o *osClient) GetIndexLifecyclePolicies(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodGet, "/_plugins/_ism/policies", nil, "", "")
+}
+
+func (o *osClient) ExplainIndexLifecycle(indexPattern string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodGet, "/_plugins/_ism/explain/"+escapeIndexPattern(indexPattern), nil, "", "")
+}
+
+func (o *osClient) RetryIndexLifecycle(indices []string, state string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	body := "{}"
+	if state != "" {
+		body = `{"state":` + jsonStr(state) + `}`
+	}
+	return o.do(ctx, target, http.MethodPost, "/_plugins/_ism/retry/"+escapeIndexList(indices), nil, body, "")
+}
+
+func (o *osClient) GetIndexLifecycleStatus(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	params := url.Values{}
+	params.Set("include_defaults", "true")
+	params.Set("flat_settings", "true")
+	return o.do(ctx, target, http.MethodGet, "/_cluster/settings", params, "", "")
+}
+
+func (o *osClient) SetIndexLifecycleRunning(start bool, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	body := `{"persistent":{"plugins.index_state_management.enabled":` + strconv.FormatBool(start) + `}}`
+	return o.do(ctx, target, http.MethodPut, "/_cluster/settings", nil, body, "")
+}
+
+func (o *osClient) GetSnapshotLifecyclePolicies(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodGet, "/_plugins/_sm/policies", nil, "", "")
+}
+
+func (o *osClient) ExplainSnapshotLifecyclePolicies(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	return o.do(ctx, target, http.MethodGet, "/_plugins/_sm/policies/*/_explain", nil, "", "")
+}
+
+func (o *osClient) ExecuteOrToggleSnapshotPolicy(policyID, action string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
+	base := "/_plugins/_sm/policies/" + url.PathEscape(policyID)
+	switch action {
+	case "start":
+		return o.do(ctx, target, http.MethodPost, base+"/_start", nil, "", "")
+	case "stop":
+		return o.do(ctx, target, http.MethodPost, base+"/_stop", nil, "", "")
+	case "restart":
+		if resp, err := o.do(ctx, target, http.MethodPost, base+"/_stop", nil, "", ""); err != nil || !resp.IsSuccess() {
+			return resp, err
+		}
+		return o.do(ctx, target, http.MethodPost, base+"/_start", nil, "", "")
+	default:
+		resp := domain.ErrorResponse(400, "unsupported snapshot policy action: "+action)
+		return &resp, nil
+	}
 }
 
 func (o *osClient) ExecuteRequest(method, path string, data json.RawMessage, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {

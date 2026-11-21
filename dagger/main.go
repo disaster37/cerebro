@@ -150,6 +150,7 @@ func (c *Cerebro) elasticsearchService() *dagger.Service {
 		WithUser("elasticsearch").
 		WithEnvVariable("discovery.type", "single-node").
 		WithEnvVariable("xpack.security.enabled", "false").
+		WithEnvVariable("path.repo", "/tmp").
 		WithEnvVariable("ES_JAVA_OPTS", "-Xms512m -Xmx512m").
 		WithExposedPort(9200).
 		AsService(dagger.ContainerAsServiceOpts{UseEntrypoint: true})
@@ -170,6 +171,7 @@ func (c *Cerebro) opensearchService() *dagger.Service {
 		WithEnvVariable("discovery.type", "single-node").
 		WithEnvVariable("DISABLE_SECURITY_PLUGIN", "true").
 		WithEnvVariable("DISABLE_PERFORMANCE_ANALYZER_AGENT_CLI", "true").
+		WithEnvVariable("path.repo", "/tmp").
 		WithEnvVariable("OPENSEARCH_JAVA_OPTS", "-Xms512M -Xmx512M").
 		WithExposedPort(9200).
 		AsService(dagger.ContainerAsServiceOpts{UseEntrypoint: true})

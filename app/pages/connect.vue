@@ -3,9 +3,9 @@
     <UCard
       class="connect-card mx-auto max-w-md"
       :ui="{
-        root: 'overflow-hidden bg-white shadow-sm ring-1 ring-neutral-200',
-        header: 'bg-neutral-900 px-6 py-4 text-white',
-        body: 'bg-white p-6',
+        root: 'overflow-hidden bg-white shadow-sm ring-1 ring-neutral-200 dark:bg-neutral-900 dark:ring-neutral-800',
+        header: 'bg-neutral-900 px-6 py-4 text-white dark:bg-neutral-950',
+        body: 'bg-white p-6 dark:bg-neutral-900',
       }"
     >
       <template #header>
@@ -69,7 +69,7 @@
           </UFormField>
         </div>
 
-        <div class="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+        <div class="rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
           <UCheckbox
             v-model="trustCert"
             label="Trust self-signed certificate"

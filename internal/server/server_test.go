@@ -49,6 +49,15 @@ func newServerEngine(t *testing.T, authType string) (*handler.Handlers, *config.
 	if err := os.WriteFile(filepath.Join("output", "public", "index.html"), []byte("<html>spa</html>"), 0o644); err != nil {
 		t.Fatalf("write index.html: %v", err)
 	}
+	for name, content := range map[string]string{
+		"favicon.ico": "dummy-ico",
+		"favicon.png": "dummy-png",
+		"logo.svg":    "dummy-svg",
+	} {
+		if err := os.WriteFile(filepath.Join("output", "public", name), []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
 
 	cfg := &config.Config{
 		Secret:   "server-test-secret",
@@ -177,10 +186,20 @@ func TestServerAuthEnabled_PublicRoutesReachableWithoutSession(t *testing.T) {
 		t.Errorf("GET /login body = %q, want the SPA shell", res.Body())
 	}
 
-	// Favicon stays reachable.
-	w = ut.PerformRequest(srv.Engine, "GET", "/favicon.ico", nil)
-	if res = w.Result(); res.StatusCode() != http.StatusNoContent {
-		t.Errorf("GET /favicon.ico HTTP status = %d, want 204", res.StatusCode())
+	// Static assets stay reachable without a session.
+	for path, want := range map[string]string{
+		"/favicon.ico": "dummy-ico",
+		"/favicon.png": "dummy-png",
+		"/logo.svg":    "dummy-svg",
+	} {
+		w = ut.PerformRequest(srv.Engine, "GET", path, nil)
+		res = w.Result()
+		if res.StatusCode() != http.StatusOK {
+			t.Errorf("GET %s HTTP status = %d, want 200", path, res.StatusCode())
+		}
+		if got := string(res.Body()); got != want {
+			t.Errorf("GET %s body = %q, want %q", path, got, want)
+		}
 	}
 
 	// Logout is callable without a session.

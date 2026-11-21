@@ -5,3 +5,150 @@ pre {
   white-space: pre-wrap;
   word-wrap: break-word;
 }
+
+/* Shard allocation badges (overview matrix) */
+.shard-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.shard-badge:hover {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.15);
+}
+.shard-badge--primary {
+  border: 2px solid currentColor;
+}
+.shard-badge--replica {
+  border: 2px dashed currentColor;
+}
+.shard-badge--started {
+  color: #10b981;
+  background: rgb(16 185 129 / 0.16);
+}
+.shard-badge--initializing {
+  color: #38bdf8;
+  background: rgb(56 189 248 / 0.16);
+}
+.shard-badge--relocating {
+  color: #a78bfa;
+  background: rgb(167 139 250 / 0.16);
+}
+.shard-badge--recovering {
+  color: #f59e0b;
+  background: rgb(245 158 11 / 0.16);
+}
+.shard-badge--unassigned {
+  color: #f59e0b;
+  background: rgb(245 158 11 / 0.2);
+}
+.shard-badge--unassigned-primary {
+  color: #f43f5e;
+  background: rgb(244 63 94 / 0.24);
+}
+
+/* CodeMirror console */
+.cm-console-host {
+  height: 100%;
+  min-height: 320px;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+.cm-console-host .cm-editor {
+  height: 100%;
+  font-size: 13px;
+}
+.cm-console-host .cm-scroller {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: auto;
+}
+.cm-console-host .cm-gutters {
+  border-right: 1px solid rgb(38 38 38 / 0.6);
+}
+.cm-play-gutter {
+  cursor: pointer;
+  color: #10b981;
+  padding: 0 4px;
+}
+.cm-active-request {
+  background: rgb(56 189 248 / 0.08);
+}
+.cm-active-request-line {
+  background: rgb(56 189 248 / 0.08);
+}
+
+/* Kibana-style inline request header actions */
+.cm-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.cm-line:hover .cm-header-actions,
+.cm-active-request-line .cm-header-actions {
+  opacity: 1;
+}
+.cm-header-actions button {
+  border: 1px solid rgb(113 113 122 / 0.5);
+  border-radius: 0.25rem;
+  padding: 0 0.35rem;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #a1a1aa;
+  background: rgb(24 24 27 / 0.9);
+  cursor: pointer;
+}
+.cm-header-actions button:hover {
+  color: #f4f4f5;
+  border-color: rgb(56 189 248 / 0.7);
+}
+
+/* Dark autocomplete tooltip */
+.cm-tooltip.cm-tooltip-autocomplete {
+  border: 1px solid rgb(63 63 70);
+  border-radius: 0.375rem;
+  background: #18181b;
+  color: #e4e4e7;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+}
+.cm-tooltip-autocomplete > ul > li {
+  padding: 2px 6px;
+}
+.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: rgb(56 189 248 / 0.2);
+  color: #f4f4f5;
+}
+.cm-completionLabel {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.cm-completionDetail {
+  color: #71717a;
+  font-style: normal;
+}
+
+/* Resizable split pane */
+.console-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  min-height: 480px;
+}
+.console-split--stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+.console-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
