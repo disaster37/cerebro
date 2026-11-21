@@ -90,7 +90,7 @@ const visibleCount = computed(() => {
   return filteredData.value.filter((row) => JSON.stringify(row).toLowerCase().includes(query)).length
 })
 
-function onSelect(row: any) {
+function onSelect(_event: Event, row: any) {
   emit('select', row?.original ?? row)
 }
 </script>

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { toRaw } from 'vue'
 import CerebroTable from '@/components/CerebroTable.vue'
-import { nuxtUiStubs, resetTestStubs } from '../setup'
+import { resetTestStubs } from '../setup'
 
 const rows = [
   { name: 'beta', size: 20 },
@@ -54,16 +55,18 @@ describe('CerebroTable', () => {
     expect(names[0]).toContain('gamma')
   })
 
-  it('emits the underlying row data when a TanStack row object is selected', () => {
+  it('emits the underlying row data when a table row is clicked', async () => {
     const wrapper = mount(CerebroTable, { props: { data: rows, columns } })
-    const table = wrapper.findComponent(nuxtUiStubs.UTable)
-    const payload = { original: rows[0], id: 'row-0' }
 
-    ;(table.vm as any).$emit('select', payload)
+    await wrapper.findAll('tbody tr')[0].trigger('click')
 
     expect(wrapper.emitted('select')).toBeTruthy()
-    expect(wrapper.emitted('select')![0][0]).toEqual(rows[0])
-    expect(wrapper.emitted('select')![0][0]).not.toBe(payload)
+    const payload = wrapper.emitted('select')![0][0]
+    expect(payload).toEqual(rows[0])
+    expect(payload).not.toBeInstanceOf(Event)
+    // The payload is the original row object (possibly wrapped in Vue's
+    // reactive proxy), never the Event or the TanStack row wrapper.
+    expect(toRaw(payload)).toBe(rows[0])
   })
 })
 

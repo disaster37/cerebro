@@ -133,6 +133,34 @@ describe('DevTools page', () => {
     expect(writeText).toHaveBeenCalled()
     expect(wrapper.find('[data-testid="copy-curl-feedback"]').text()).toContain('Copied cURL')
   })
+
+  it('appends "METHOD path" to the buffer when a history row is clicked', async () => {
+    setConnection()
+    ;(globalThis as any).$fetch.mockImplementation((url: string) => {
+      if (url === '/rest') {
+        return Promise.resolve({ status: 200, body: { indices: [], fieldsByIndex: {}, allFields: [], backendType: 'elasticsearch', host: 'https://es:9200' } })
+      }
+      if (url === '/rest/history') {
+        return Promise.resolve({
+          status: 200,
+          body: [{ created_at: '2024-01-01T00:00:00Z', method: 'GET', path: '_cat/indices', body: '' }],
+        })
+      }
+      return Promise.resolve({ status: 200, body: {} })
+    })
+
+    const wrapper = mount(DevToolsPage)
+    await flushPromises()
+
+    await wrapper.findAll('button').find((b) => b.text() === 'History')!.trigger('click')
+    await flushPromises()
+
+    await wrapper.find('.umodal tbody tr').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.cm-content').text()).toContain('GET _cat/indices')
+    expect(wrapper.find('.cm-content').text()).not.toContain('undefined undefined')
+  })
 })
 
 describe('KibanaConsoleEditor autocomplete', () => {

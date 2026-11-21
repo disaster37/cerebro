@@ -183,8 +183,8 @@ export const nuxtUiStubs = {
   },
   UTable: {
     inheritAttrs: false,
-    props: ['data', 'columns', 'sorting', 'globalFilter', 'loading', 'empty', 'ui', 'getRowId'],
-    emits: ['update:sorting', 'update:globalFilter', 'select'],
+    props: ['data', 'columns', 'sorting', 'globalFilter', 'loading', 'empty', 'ui', 'getRowId', 'onSelect'],
+    emits: ['update:sorting', 'update:globalFilter'],
     setup(props: any, { slots, emit, attrs }: any) {
       const isUndefined = (value: any) => value === undefined || value === null
       const rows = computed(() => {
@@ -245,6 +245,7 @@ export const nuxtUiStubs = {
         ]),
         h('tbody', {}, rows.value.map((item: any, rIdx: number) => h('tr', {
           key: props.getRowId ? props.getRowId(item) : rIdx,
+          onClick: (event: Event) => props.onSelect?.(event, { original: item }),
         }, (props.columns || []).map((col: any, cIdx: number) => {
           const name = `${col.id || col.accessorKey}-cell`
           const content = slots[name]
