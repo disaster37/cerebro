@@ -29,6 +29,17 @@ describe('NavbarComponent', () => {
     ;(globalThis as any).$fetch.mockReset()
   })
 
+  it('renders the brand logo in the navbar', async () => {
+    stubAuthMe({ authEnabled: false })
+
+    const wrapper = mountNavbar()
+    await flushPromises()
+
+    const logo = wrapper.find('[data-testid="navbar-logo"]')
+    expect(logo.exists()).toBe(true)
+    expect(logo.attributes('src')).toBe('/logo.svg')
+  })
+
   it('hides Login, Logout and user when auth is disabled and no connection exists', async () => {
     stubAuthMe({ authEnabled: false })
 

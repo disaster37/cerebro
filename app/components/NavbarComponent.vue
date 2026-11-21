@@ -1,7 +1,7 @@
 <template>
   <header class="sticky top-0 z-50 border-b bg-white/95 backdrop-blur dark:bg-neutral-950/95" :class="healthBorder">
     <div class="flex w-full items-center gap-4 px-4 py-2 sm:px-6">
-      <NuxtLink to="/" class="text-sm font-semibold">cerebro</NuxtLink>
+      <NuxtLink to="/" class="flex items-center gap-2 text-sm font-semibold"><img src="/logo.svg" alt="cerebro logo" class="size-8" data-testid="navbar-logo">cerebro</NuxtLink>
 
       <UNavigationMenu
         :items="navItems"

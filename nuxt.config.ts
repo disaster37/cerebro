@@ -1,5 +1,15 @@
 export default defineNuxtConfig({
   ssr: false,
+  app: {
+    head: {
+      title: 'cerebro',
+      link: [
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
+        { rel: 'icon', type: 'image/png', sizes: '512x512', href: '/favicon.png' },
+        { rel: 'apple-touch-icon', href: '/favicon.png' },
+      ],
+    },
+  },
   modules: ['@nuxt/ui'],
   css: ['~/assets/css/main.css'],
   colorMode: {

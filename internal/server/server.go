@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"path/filepath"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -32,7 +31,7 @@ func NewServer(port int, cfg *config.Config, h *handler.Handlers) *server.Hertz 
 
 	// --- Public routes (no session required) ---
 	// The SPA shell served on /login renders the login form; /connect/hosts
-	// feeds the connect screen; assets/favicon are needed to render them.
+	// feeds the connect screen; assets/favicon/logo are needed to render them.
 	srv.GET("/login", h.AuthIndex)
 	srv.GET("/connect/hosts", h.ConnectIndex)
 	srv.POST("/auth/login", h.AuthLogin)
@@ -52,7 +51,13 @@ func NewServer(port int, cfg *config.Config, h *handler.Handlers) *server.Hertz 
 	srv.StaticFS("/public", &app.FS{Root: filepath.Join("output")})
 	srv.StaticFS("/_nuxt", &app.FS{Root: publicDir})
 	srv.GET("/favicon.ico", func(ctx context.Context, c *app.RequestContext) {
-		c.Status(http.StatusNoContent)
+		app.ServeFileUncompressed(c, filepath.Join(publicDir, "favicon.ico"))
+	})
+	srv.GET("/favicon.png", func(ctx context.Context, c *app.RequestContext) {
+		app.ServeFileUncompressed(c, filepath.Join(publicDir, "favicon.png"))
+	})
+	srv.GET("/logo.svg", func(ctx context.Context, c *app.RequestContext) {
+		app.ServeFileUncompressed(c, filepath.Join(publicDir, "logo.svg"))
 	})
 
 	// --- Auth middleware: everything registered below is protected ---

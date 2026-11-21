@@ -7,6 +7,7 @@ Cerebro is an open-source (MIT) web admin tool for **Elasticsearch 9** and
 **OpenSearch 3**, built with [Go](https://go.dev) (Hertz) and
 [Vue 3](https://vuejs.org) / [Nuxt 4](https://nuxt.com). It is a from-scratch rewrite of
 the [original Scala/Play/AngularJS project](https://github.com/lmenezes/cerebro).
+This project is not affiliated with or endorsed by the original Cerebro author.
 
 ## Requirements
 
