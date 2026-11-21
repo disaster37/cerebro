@@ -64,6 +64,7 @@ func runAcceptanceSuite(t *testing.T, url string, wantFlavor elastic.Flavor, wan
 	// across runs, so remove any leftovers from a previous (possibly failed) run.
 	_, _ = client.DeleteIndex("cerebro-acceptance", ctx, target)
 	_, _ = client.DeleteIndex("restored-cerebro-acceptance", ctx, target)
+	_, _ = client.DeleteSnapshot("cerebro-acceptance-repo", "cerebro-acceptance-snap", ctx, target)
 	_, _ = client.DeleteRepository("cerebro-acceptance-repo", ctx, target)
 	_, _ = client.DeleteDataStream("cerebro-acceptance-ds", ctx, target)
 	_, _ = client.DeleteComposableTemplate("cerebro-acceptance-ds-ds-template", ctx, target)
