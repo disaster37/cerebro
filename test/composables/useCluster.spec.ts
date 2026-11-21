@@ -230,6 +230,28 @@ describe('useCluster', () => {
 
     ;(globalThis as any).$fetch.mockResolvedValueOnce({ status: 404, body: { error: 'not found' } })
     await apiCall('POST', '/overview', { host: 'x' })
-    expect(alerts()).toHaveLength(3)
+    expect(alerts()).toHaveLength(4)
+    expect(alerts()[3].message).toContain('Cluster request rejected (404)')
+    expect(alerts()[3].message).toContain('not found')
+
+    ;(globalThis as any).$fetch.mockResolvedValueOnce({ status: 409, body: { error: 'conflict' } })
+    await apiCall('POST', '/overview', { host: 'x' })
+    expect(alerts()).toHaveLength(5)
+    expect(alerts()[4].message).toContain('Cluster request rejected (409)')
+  })
+
+  it('suppresses alerts for thrown fetch errors when suppressErrorAlert is set', async () => {
+    const { apiCall } = useAPI()
+    const alerts = () => (globalThis as any).useState('alerts').value
+
+    ;(globalThis as any).$fetch.mockRejectedValueOnce(new Error('backend unreachable'))
+    const suppressed = await apiCall('POST', '/navbar', { host: 'x' }, { suppressErrorAlert: true })
+    expect(suppressed).toBeNull()
+    expect(alerts()).toHaveLength(0)
+
+    ;(globalThis as any).$fetch.mockRejectedValueOnce(new Error('backend unreachable'))
+    await apiCall('POST', '/overview', { host: 'x' })
+    expect(alerts()).toHaveLength(1)
+    expect(alerts()[0]).toEqual({ message: 'backend unreachable', type: 'danger' })
   })
 })

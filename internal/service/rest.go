@@ -9,14 +9,16 @@ import (
 )
 
 type RestService struct {
-	aliases domain.AliasAPI
-	raw     domain.RawAPI
-	history domain.RestHistoryRepository
-	histMax int
+	aliases     domain.AliasAPI
+	cluster     domain.ClusterAPI
+	raw         domain.RawAPI
+	dataStreams domain.DataStreamAPI
+	history     domain.RestHistoryRepository
+	histMax     int
 }
 
-func NewRestService(aliases domain.AliasAPI, raw domain.RawAPI, history domain.RestHistoryRepository, histMax int) *RestService {
-	return &RestService{aliases: aliases, raw: raw, history: history, histMax: histMax}
+func NewRestService(aliases domain.AliasAPI, cluster domain.ClusterAPI, raw domain.RawAPI, dataStreams domain.DataStreamAPI, history domain.RestHistoryRepository, histMax int) *RestService {
+	return &RestService{aliases: aliases, cluster: cluster, raw: raw, dataStreams: dataStreams, history: history, histMax: histMax}
 }
 
 func (s *RestService) Index(ctx context.Context, req domain.CerebroRequest) (domain.Response, error) {
@@ -24,10 +26,40 @@ func (s *RestService) Index(ctx context.Context, req domain.CerebroRequest) (dom
 	if err != nil {
 		return domain.ErrorResponse(502, err.Error()), nil
 	}
-	indices, _ := domain.AutocompletionIndices(resp.Body)
+
+	// Data streams are best-effort: restricted users may not be allowed to
+	// read GET /_data_stream, and DevTools must still load.
+	var dataStreamsRaw json.RawMessage
+	var backingMeta map[string]domain.DataStreamBackingMeta
+	if s.dataStreams != nil {
+		if dsResp, derr := s.dataStreams.GetDataStreams(ctx, req.Target); derr == nil && dsResp.IsSuccess() {
+			dataStreamsRaw = dsResp.Body
+			_, backingMeta, _ = domain.ParseDataStreams(dsResp.Body)
+		}
+	}
+
+	indices, _ := domain.AutocompletionIndices(resp.Body, dataStreamsRaw)
+
+	fieldsByIndex := map[string][]string{}
+	allFields := []string{}
+	if mappingResp, merr := s.cluster.GetClusterMapping(ctx, req.Target); merr == nil && mappingResp.IsSuccess() {
+		if byIndex, all, ferr := domain.ExtractMappingFields(mappingResp.Body, backingMeta); ferr == nil {
+			fieldsByIndex = byIndex
+			allFields = all
+		}
+	}
+
+	backendType := ""
+	if bi, berr := s.cluster.BackendInfo(ctx, req.Target); berr == nil {
+		backendType = bi.Type
+	}
+
 	data, _ := json.Marshal(map[string]any{
-		"indices": json.RawMessage(indices),
-		"host":    req.Target.Host.Name,
+		"indices":       json.RawMessage(indices),
+		"fieldsByIndex": fieldsByIndex,
+		"allFields":     allFields,
+		"backendType":   backendType,
+		"host":          req.Target.Host.Name,
 	})
 	return domain.NewResponse(resp.Status, data), nil
 }
@@ -101,7 +133,7 @@ func (s *RestService) History(ctx context.Context, req domain.CerebroRequest) (d
 	if err != nil {
 		return domain.ErrorResponse(500, "Error while loading requests history: "+err.Error()), nil
 	}
-	var items []map[string]any
+	items := make([]map[string]any, 0, len(entries))
 	for _, e := range entries {
 		items = append(items, map[string]any{
 			"path":       e.Path,

@@ -3,6 +3,8 @@ package elastic
 import (
 	"encoding/json"
 	"testing"
+
+	"cerebro/internal/domain"
 )
 
 // TestBodyBuildersAlwaysProduceValidJSON pins the JSON-injection fix: no
@@ -16,7 +18,7 @@ func TestBodyBuildersAlwaysProduceValidJSON(t *testing.T) {
 		"shardAllocation":   shardAllocationBody(evil),
 		"relocateShard":     relocateShardBody(1, evil, evil, evil),
 		"createSnapshot":    createSnapshotBody(true, false, evil),
-		"restoreSnapshot":   restoreSnapshotBody(evil, evil, true, true, true, evil),
+		"restoreSnapshot":   restoreSnapshotBody(domain.RestoreSnapshotOptions{Indices: evil, RenamePattern: evil, RenameReplacement: evil, IgnoreUnavailable: true, IncludeAliases: true, IncludeGlobalState: true}),
 		"analyzeByField":    analyzeByFieldBody(evil, evil),
 		"analyzeByAnalyzer": analyzeByAnalyzerBody(evil, evil),
 		"createRepository":  createRepositoryBody(evil, json.RawMessage(`{}`)),

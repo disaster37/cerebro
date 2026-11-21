@@ -103,10 +103,10 @@ func run(c *cli.Context) error {
 		Secret: cfg.Secret,
 
 		Connect:         service.NewConnectService(esClient),
-		Overview:        service.NewOverviewService(esClient, esClient, esClient),
+		Overview:        service.NewOverviewService(esClient, esClient, esClient, esClient, esClient),
 		Nodes:           service.NewNodesService(esClient, esClient),
 		Navbar:          service.NewNavbarService(esClient),
-		Rest:            service.NewRestService(esClient, esClient, historyRepo, cfg.RestHistorySize),
+		Rest:            service.NewRestService(esClient, esClient, esClient, esClient, historyRepo, cfg.RestHistorySize),
 		Aliases:         service.NewAliasesService(esClient),
 		Analysis:        service.NewAnalysisService(esClient, esClient),
 		Cat:             service.NewCatService(esClient),
@@ -118,6 +118,8 @@ func run(c *cli.Context) error {
 		Repositories:    service.NewRepositoriesService(esClient),
 		Snapshots:       service.NewSnapshotsService(esClient, esClient),
 		Templates:       service.NewTemplatesService(esClient),
+		Policies:        service.NewPoliciesService(esClient, esClient),
+		DataStreams:     service.NewDataStreamsService(esClient, esClient),
 	}
 
 	srv := server.NewServer(c.Int("port"), cfg, h)

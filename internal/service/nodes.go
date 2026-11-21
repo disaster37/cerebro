@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 
 	"cerebro/internal/domain"
 )
@@ -30,6 +31,14 @@ func (s *NodesService) Index(ctx context.Context, req domain.CerebroRequest) (do
 	if !stats.IsSuccess() {
 		return *stats, nil
 	}
+	// OpenSearch's cgroup-aware resource tracker is a best-effort secondary
+	// source; Elasticsearch or older/restricted clusters simply fall back.
+	var resourceStatsRaw json.RawMessage
+	if s.nodes != nil {
+		if res, rerr := s.nodes.NodesResourceUsageStats(ctx, req.Target); rerr == nil && res != nil && res.IsSuccess() {
+			resourceStatsRaw = res.Body
+		}
+	}
 	master, err := s.cat.CatMaster(ctx, req.Target)
 	if err != nil {
 		return domain.ErrorResponse(502, err.Error()), nil
@@ -37,7 +46,7 @@ func (s *NodesService) Index(ctx context.Context, req domain.CerebroRequest) (do
 	if !master.IsSuccess() {
 		return *master, nil
 	}
-	body, err := domain.NodesData(info.Body, stats.Body, master.Body)
+	body, err := domain.NodesData(info.Body, stats.Body, master.Body, resourceStatsRaw)
 	if err != nil {
 		return domain.ErrorResponse(500, err.Error()), nil
 	}

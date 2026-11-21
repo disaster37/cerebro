@@ -2,10 +2,20 @@ export default defineNuxtConfig({
   ssr: false,
   modules: ['@nuxt/ui'],
   css: ['~/assets/css/main.css'],
+  colorMode: {
+    preference: 'dark',
+    fallback: 'dark',
+    classSuffix: '',
+    storageKey: 'cerebro-color-mode',
+  },
   ui: {
-    // Preserve current light-only behavior and avoid build-time font fetching.
-    colorMode: false,
+    colorMode: true,
     fonts: false,
+  },
+  icon: {
+    clientBundle: {
+      scan: true,
+    },
   },
   nitro: {
     output: {

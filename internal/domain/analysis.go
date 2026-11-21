@@ -10,7 +10,7 @@ func OpenIndices(in json.RawMessage) (json.RawMessage, error) {
 	if err := json.Unmarshal(in, &arr); err != nil {
 		return nil, err
 	}
-	var out []string
+	out := make([]string, 0, len(arr))
 	for _, e := range arr {
 		if e.Status == "open" {
 			out = append(out, e.Index)
@@ -43,7 +43,7 @@ func IndexAnalyzers(index string, settings json.RawMessage) (json.RawMessage, er
 	}
 	var analyzers map[string]any
 	_ = json.Unmarshal(idx.Settings.Index.Analysis.Analyzer, &analyzers)
-	var out []string
+	out := make([]string, 0, len(analyzers))
 	for k := range analyzers {
 		out = append(out, k)
 	}
@@ -64,7 +64,7 @@ func IndexFields(index string, mapping json.RawMessage) (json.RawMessage, error)
 	}
 	_ = json.Unmarshal(idxData, &idx)
 	fields := extractFieldNames(idx.Mappings)
-	var out []any
+	out := make([]any, 0, len(fields))
 	for _, f := range fields {
 		out = append(out, f)
 	}
@@ -80,7 +80,7 @@ func extractFieldNames(mappings json.RawMessage) []string {
 var analyzableTypes = map[string]bool{"string": true, "text": true}
 
 func walkProperties(v any, prefix string) []string {
-	var result []string
+	result := make([]string, 0)
 	switch m := v.(type) {
 	case map[string]any:
 		if props, ok := m["properties"]; ok {

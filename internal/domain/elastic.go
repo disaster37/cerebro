@@ -9,6 +9,7 @@ import (
 type ClusterAPI interface {
 	Main(ctx context.Context, target ElasticServer) (*Response, error)
 	ClusterState(ctx context.Context, target ElasticServer) (*Response, error)
+	ClusterStateMetrics(ctx context.Context, target ElasticServer) (*Response, error)
 	ClusterHealth(ctx context.Context, target ElasticServer) (*Response, error)
 	ClusterSettings(ctx context.Context, target ElasticServer) (*Response, error)
 	GetClusterSettingsFlat(ctx context.Context, target ElasticServer) (*Response, error)
@@ -17,8 +18,18 @@ type ClusterAPI interface {
 	EnableShardAllocation(ctx context.Context, target ElasticServer) (*Response, error)
 	DisableShardAllocation(kind string, ctx context.Context, target ElasticServer) (*Response, error)
 	RelocateShard(shard int, index, from, to string, ctx context.Context, target ElasticServer) (*Response, error)
+	AllocationExplain(index string, shard int, primary bool, ctx context.Context, target ElasticServer) (*Response, error)
 	GetClusterMapping(ctx context.Context, target ElasticServer) (*Response, error)
 	BackendInfo(ctx context.Context, target ElasticServer) (BackendInfo, error)
+}
+
+// DataStreamAPI is data stream operations (identical paths on ES 8/9 and
+// OpenSearch 2/3).
+type DataStreamAPI interface {
+	GetDataStreams(ctx context.Context, target ElasticServer) (*Response, error)
+	CreateDataStream(name string, ctx context.Context, target ElasticServer) (*Response, error)
+	DeleteDataStream(name string, ctx context.Context, target ElasticServer) (*Response, error)
+	RolloverDataStream(name string, ctx context.Context, target ElasticServer) (*Response, error)
 }
 
 // IndexAPI is index-level operations.
@@ -54,6 +65,7 @@ type AliasAPI interface {
 type NodeAPI interface {
 	Nodes(flags []string, ctx context.Context, target ElasticServer) (*Response, error)
 	NodesStats(stats []string, ctx context.Context, target ElasticServer) (*Response, error)
+	NodesResourceUsageStats(ctx context.Context, target ElasticServer) (*Response, error)
 	NodeStats(node string, ctx context.Context, target ElasticServer) (*Response, error)
 	GetNodes(ctx context.Context, target ElasticServer) (*Response, error)
 }
@@ -63,6 +75,9 @@ type TemplateAPI interface {
 	GetTemplates(ctx context.Context, target ElasticServer) (*Response, error)
 	CreateTemplate(name string, template json.RawMessage, ctx context.Context, target ElasticServer) (*Response, error)
 	DeleteTemplate(name string, ctx context.Context, target ElasticServer) (*Response, error)
+	GetComposableTemplates(ctx context.Context, target ElasticServer) (*Response, error)
+	CreateComposableTemplate(name string, template json.RawMessage, ctx context.Context, target ElasticServer) (*Response, error)
+	DeleteComposableTemplate(name string, ctx context.Context, target ElasticServer) (*Response, error)
 }
 
 // SnapshotAPI is snapshot/repository operations.
@@ -73,7 +88,9 @@ type SnapshotAPI interface {
 	GetSnapshots(repository string, ctx context.Context, target ElasticServer) (*Response, error)
 	DeleteSnapshot(repository, snapshot string, ctx context.Context, target ElasticServer) (*Response, error)
 	CreateSnapshot(repository, snapshot string, ignoreUnavailable, includeGlobalState bool, indices string, ctx context.Context, target ElasticServer) (*Response, error)
-	RestoreSnapshot(repository, snapshot string, renamePattern, renameReplacement string, ignoreUnavailable, includeAliases, includeGlobalState bool, indices string, ctx context.Context, target ElasticServer) (*Response, error)
+	RestoreSnapshot(repository, snapshot string, opts RestoreSnapshotOptions, ctx context.Context, target ElasticServer) (*Response, error)
+	VerifyRepository(name string, ctx context.Context, target ElasticServer) (*Response, error)
+	GetSnapshotStatus(repository, snapshot string, ignoreUnavailable bool, ctx context.Context, target ElasticServer) (*Response, error)
 }
 
 // AnalysisAPI is analyzer operations.
@@ -93,6 +110,20 @@ type RawAPI interface {
 	ExecuteRequest(method, path string, data json.RawMessage, ctx context.Context, target ElasticServer) (*Response, error)
 }
 
+// PolicyAPI is index/snapshot lifecycle policy operations (ILM/SLM on
+// Elasticsearch, ISM/SM on OpenSearch).
+type PolicyAPI interface {
+	GetIndexLifecyclePolicies(ctx context.Context, target ElasticServer) (*Response, error)
+	ExplainIndexLifecycle(indexPattern string, ctx context.Context, target ElasticServer) (*Response, error)
+	RetryIndexLifecycle(indices []string, state string, ctx context.Context, target ElasticServer) (*Response, error)
+	GetIndexLifecycleStatus(ctx context.Context, target ElasticServer) (*Response, error)
+	SetIndexLifecycleRunning(start bool, ctx context.Context, target ElasticServer) (*Response, error)
+
+	GetSnapshotLifecyclePolicies(ctx context.Context, target ElasticServer) (*Response, error)
+	ExplainSnapshotLifecyclePolicies(ctx context.Context, target ElasticServer) (*Response, error)
+	ExecuteOrToggleSnapshotPolicy(policyID, action string, ctx context.Context, target ElasticServer) (*Response, error)
+}
+
 // ElasticClient is the full backend client capability, composed of the narrow
 // capability interfaces above. Infrastructure (repository/elastic.MultiClient)
 // implements it; services depend on the narrow interfaces they need.
@@ -106,4 +137,6 @@ type ElasticClient interface {
 	AnalysisAPI
 	CatAPI
 	RawAPI
+	PolicyAPI
+	DataStreamAPI
 }

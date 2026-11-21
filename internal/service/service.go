@@ -9,6 +9,8 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"cerebro/internal/domain"
 )
@@ -31,6 +33,9 @@ func transform(resp *domain.Response, err error, fn func(json.RawMessage) (json.
 	if err != nil {
 		return domain.ErrorResponse(502, err.Error()), nil
 	}
+	if !resp.IsSuccess() {
+		return *resp, nil
+	}
 	body, err := fn(resp.Body)
 	if err != nil {
 		return domain.ErrorResponse(500, err.Error()), nil
@@ -45,8 +50,8 @@ func forwardOp(ctx context.Context, req domain.CerebroRequest, param string,
 	op func(v string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error),
 ) (domain.Response, error) {
 	v, err := req.Get(param)
-	if err != nil {
-		return domain.ErrorResponse(400, err.Error()), nil
+	if err != nil || strings.TrimSpace(v) == "" {
+		return domain.ErrorResponse(400, fmt.Sprintf("missing required parameter %q", param)), nil
 	}
 	return forward(op(v, ctx, req.Target))
 }
