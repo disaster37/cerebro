@@ -16,7 +16,7 @@
     </UCard>
 
     <div v-else-if="settings">
-      <UAlert v-if="saveSuccess" color="success" variant="soft" class="mb-3" data-testid="cluster-settings-success" :description="'Cluster settings saved.'" />
+      <UAlert v-if="saveSuccess" color="success" variant="soft" class="mb-3" data-testid="cluster-settings-success" description="Cluster settings saved." />
       <UAlert v-if="saveError" color="error" variant="soft" class="mb-3" data-testid="cluster-settings-save-error" :description="saveError" />
 
       <UCard class="mb-4">

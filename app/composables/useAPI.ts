@@ -108,7 +108,9 @@ export function useAPI() {
 
       return data
     } catch (err: any) {
-      pushUniqueAlert(alerts.value, err.message || 'Request failed', 'danger')
+      if (!options?.suppressErrorAlert) {
+        pushUniqueAlert(alerts.value, err.message || 'Request failed', 'danger')
+      }
       return null
     }
   }

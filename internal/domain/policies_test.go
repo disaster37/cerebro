@@ -205,6 +205,21 @@ func TestISMOperationModeBooleanAndString(t *testing.T) {
 			status: `{"persistent":{"plugins.index_state_management.enabled":"false"},"defaults":{"plugins.index_state_management.enabled":true}}`,
 			want:   "STOPPED",
 		},
+		{
+			name:   "string FALSE with surrounding whitespace",
+			status: `{"persistent":{"plugins.index_state_management.enabled":" FALSE "}}`,
+			want:   "STOPPED",
+		},
+		{
+			name:   "string True mixed case",
+			status: `{"persistent":{"plugins.index_state_management.enabled":"True"}}`,
+			want:   "RUNNING",
+		},
+		{
+			name:   "null persistent unmarshals to bool false",
+			status: `{"persistent":{"plugins.index_state_management.enabled":null}}`,
+			want:   "STOPPED",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -239,4 +239,19 @@ describe('useCluster', () => {
     expect(alerts()).toHaveLength(5)
     expect(alerts()[4].message).toContain('Cluster request rejected (409)')
   })
+
+  it('suppresses alerts for thrown fetch errors when suppressErrorAlert is set', async () => {
+    const { apiCall } = useAPI()
+    const alerts = () => (globalThis as any).useState('alerts').value
+
+    ;(globalThis as any).$fetch.mockRejectedValueOnce(new Error('backend unreachable'))
+    const suppressed = await apiCall('POST', '/navbar', { host: 'x' }, { suppressErrorAlert: true })
+    expect(suppressed).toBeNull()
+    expect(alerts()).toHaveLength(0)
+
+    ;(globalThis as any).$fetch.mockRejectedValueOnce(new Error('backend unreachable'))
+    await apiCall('POST', '/overview', { host: 'x' })
+    expect(alerts()).toHaveLength(1)
+    expect(alerts()[0]).toEqual({ message: 'backend unreachable', type: 'danger' })
+  })
 })
