@@ -59,10 +59,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import BackendBadge from './BackendBadge.vue'
 import { defaultClusterConnection, type ClusterConnection } from '../composables/useAPI'
 import { useAuth } from '../composables/useAuth'
+import { useCluster } from '../composables/useCluster'
 
 const connection = useState<ClusterConnection>('clusterConnection', defaultClusterConnection)
 const clusterName = useState<string>('clusterName', () => '')
@@ -70,6 +71,8 @@ const backendType = useState<string>('backendType', () => '')
 const backendVersion = useState<string>('backendVersion', () => '')
 const clusterStatus = useState<string>('clusterStatus', () => '')
 const { user, authEnabled, checkSession, logout } = useAuth()
+const { loadNavbar } = useCluster()
+const route = useRoute()
 
 const connectLabel = computed(() => clusterName.value || 'Connect')
 const displayUser = computed(() => connection.value.username || user.value)
@@ -126,7 +129,21 @@ const mobileItems = computed(() => {
   return [connect, ...primaryLinks, ...moreLinks]
 })
 
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+function refreshHealth() {
+  if (!connection.value.host) return
+  loadNavbar(connection.value.host, { suppressErrorAlert: true })
+}
+
+watch(() => route.path, refreshHealth)
+
 onMounted(() => {
   checkSession()
+  refreshTimer = setInterval(refreshHealth, 30000)
+})
+
+onBeforeUnmount(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
 })
 </script>

@@ -53,8 +53,8 @@ export function useCluster() {
     return false
   }
 
-  async function loadNavbar(host: string) {
-    const resp = await apiCall('POST', '/navbar', { host })
+  async function loadNavbar(host: string, opts?: { suppressErrorAlert?: boolean }) {
+    const resp = await apiCall('POST', '/navbar', { host }, opts?.suppressErrorAlert ? { suppressErrorAlert: true } : undefined)
     if (resp?.status === 200) {
       clusterName.value = resp.body?.cluster_name || host
       if (resp.body?.username) {

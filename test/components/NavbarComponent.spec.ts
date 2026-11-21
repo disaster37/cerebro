@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { enableAutoUnmount, mount, flushPromises } from '@vue/test-utils'
 import NavbarComponent from '@/components/NavbarComponent.vue'
-import { resetTestStubs } from '../setup'
+import { resetTestStubs, routeState } from '../setup'
+
+enableAutoUnmount(afterEach)
 
 function mountNavbar() {
   return mount(NavbarComponent)
@@ -114,6 +116,74 @@ describe('NavbarComponent', () => {
       method: 'POST',
     }))
     expect((globalThis as any).navigateTo).toHaveBeenCalledWith('/login')
+  })
+})
+
+describe('NavbarComponent cluster health refresh', () => {
+  beforeEach(() => {
+    resetTestStubs()
+    vi.clearAllMocks()
+    ;(globalThis as any).$fetch.mockReset()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function stubFetch() {
+    ;(globalThis as any).$fetch.mockImplementation((url: string) => {
+      if (url === '/auth/me') return Promise.resolve({ status: 200, body: { authEnabled: false } })
+      if (url === '/navbar') return Promise.resolve({ status: 200, body: { cluster_name: 'c', status: 'yellow' } })
+      return Promise.resolve({ status: 200, body: {} })
+    })
+  }
+
+  it('refreshes cluster health when the route path changes', async () => {
+    stubFetch()
+    setConnection('')
+
+    const wrapper = mountNavbar()
+    await flushPromises()
+    const navbarCallsBefore = (globalThis as any).$fetch.mock.calls.filter((c: any[]) => c[0] === '/navbar').length
+
+    routeState.path = '/overview'
+    await flushPromises()
+
+    const navbarCalls = (globalThis as any).$fetch.mock.calls.filter((c: any[]) => c[0] === '/navbar')
+    expect(navbarCalls.length).toBe(navbarCallsBefore + 1)
+    expect(wrapper.find('[data-testid="cluster-health-yellow"]').exists()).toBe(true)
+  })
+
+  it('periodically refreshes cluster health every 30s', async () => {
+    vi.useFakeTimers()
+    stubFetch()
+    setConnection('')
+
+    mountNavbar()
+    await flushPromises()
+    const before = (globalThis as any).$fetch.mock.calls.filter((c: any[]) => c[0] === '/navbar').length
+
+    await vi.advanceTimersByTimeAsync(30000)
+
+    const after = (globalThis as any).$fetch.mock.calls.filter((c: any[]) => c[0] === '/navbar').length
+    expect(after).toBe(before + 1)
+  })
+
+  it('fails silently when a background refresh errors', async () => {
+    ;(globalThis as any).$fetch.mockImplementation((url: string) => {
+      if (url === '/auth/me') return Promise.resolve({ status: 200, body: { authEnabled: false } })
+      if (url === '/navbar') return Promise.resolve({ status: 500, body: { error: 'boom' } })
+      return Promise.resolve({ status: 200, body: {} })
+    })
+    setConnection('')
+
+    mountNavbar()
+    await flushPromises()
+
+    routeState.path = '/indices'
+    await flushPromises()
+
+    expect((globalThis as any).useState('alerts').value).toHaveLength(0)
   })
 })
 
