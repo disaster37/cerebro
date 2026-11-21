@@ -43,7 +43,7 @@ const { clusterHost } = useCluster()
 const { apiCall } = useAPI()
 
 const presets = [
-  'indices', 'nodes', 'shards', 'allocation', 'health', 'master', 'cluster_manager',
+  'indices', 'nodes', 'shards', 'allocation', 'health', 'master',
   'aliases', 'count', 'thread_pool', 'pending_tasks', 'recovery', 'segments',
   'templates', 'snapshots', 'repositories', 'nodeattrs', 'fielddata', 'plugins',
 ]
@@ -96,6 +96,7 @@ async function execute() {
   if (resp?.status === 200) {
     result.value = resp.body
   } else {
+    result.value = null
     error.value = extractEnvelopeError(resp?.body) || `CAT request failed (${resp?.status || 'network error'}).`
   }
 }
