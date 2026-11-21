@@ -590,14 +590,18 @@ func runAcceptanceSuite(t *testing.T, url string, wantFlavor elastic.Flavor, wan
 
 	t.Run("Snapshot_create_restore", func(t *testing.T) {
 		repoName := "cerebro-acceptance-repo"
+		snapName := "cerebro-acceptance-snap"
 		if _, err := client.CreateRepository(repoName, "fs", json.RawMessage(`{"location":"/tmp/cerebro-acceptance-repo","compress":true}`), ctx, target); err != nil {
 			t.Fatalf("CreateRepository: %v", err)
 		}
 		defer func() {
+			// Delete the snapshot before the repository: removing the repository
+			// deregisters it but leaves the snapshot files on disk, which would
+			// break consecutive runs against a persistent cluster filesystem.
+			_, _ = client.DeleteSnapshot(repoName, snapName, ctx, target)
 			_, _ = client.DeleteRepository(repoName, ctx, target)
 		}()
 
-		snapName := "cerebro-acceptance-snap"
 		create, err := client.CreateSnapshot(repoName, snapName, true, false, "cerebro-acceptance", ctx, target)
 		if err != nil {
 			t.Fatalf("CreateSnapshot: %v", err)
