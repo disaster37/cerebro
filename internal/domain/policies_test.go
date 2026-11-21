@@ -173,3 +173,77 @@ func TestNormalizeSM(t *testing.T) {
 		t.Errorf("failure = %+v", p)
 	}
 }
+
+func TestISMOperationModeBooleanAndString(t *testing.T) {
+	cases := []struct {
+		name   string
+		status string
+		want   string
+	}{
+		{
+			name:   "boolean true",
+			status: `{"persistent":{"plugins.index_state_management.enabled":true}}`,
+			want:   "RUNNING",
+		},
+		{
+			name:   "boolean false",
+			status: `{"persistent":{"plugins.index_state_management.enabled":false}}`,
+			want:   "STOPPED",
+		},
+		{
+			name:   "string false",
+			status: `{"persistent":{"plugins.index_state_management.enabled":"false"}}`,
+			want:   "STOPPED",
+		},
+		{
+			name:   "string true",
+			status: `{"persistent":{"plugins.index_state_management.enabled":"true"}}`,
+			want:   "RUNNING",
+		},
+		{
+			name:   "persistent string false wins over defaults bool true",
+			status: `{"persistent":{"plugins.index_state_management.enabled":"false"},"defaults":{"plugins.index_state_management.enabled":true}}`,
+			want:   "STOPPED",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ismOperationMode(json.RawMessage(tc.status)); got != tc.want {
+				t.Errorf("ismOperationMode(%s) = %s, want %s", tc.status, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestISMExplainEntriesDirectWithTotalManagedIndices(t *testing.T) {
+	explain := json.RawMessage(`{
+		"pw-test": {"index.plugins.index_state_management.policy_id":"pw-ism","index":"pw-test","policy_id":"pw-ism","enabled":true},
+		"total_managed_indices": 1
+	}`)
+	entries := ismExplainEntries(explain)
+	if len(entries) != 1 {
+		t.Fatalf("entries = %d, want 1 (total_managed_indices skipped)", len(entries))
+	}
+	if entries[0].Index != "pw-test" || entries[0].PolicyID != "pw-ism" {
+		t.Errorf("entry = %+v, want index pw-test / policy pw-ism", entries[0])
+	}
+}
+
+func TestISMExplainEntriesWrapped(t *testing.T) {
+	explain := json.RawMessage(`{"indices":{"idx1":{"policy_id":"ism1"}}}`)
+	entries := ismExplainEntries(explain)
+	if len(entries) != 1 {
+		t.Fatalf("entries = %d, want 1", len(entries))
+	}
+	if entries[0].Index != "idx1" || entries[0].PolicyID != "ism1" {
+		t.Errorf("entry = %+v, want index idx1 / policy ism1", entries[0])
+	}
+}
+
+func TestISMExplainEntriesAllNumbers(t *testing.T) {
+	explain := json.RawMessage(`{"count":1,"total":2}`)
+	entries := ismExplainEntries(explain)
+	if len(entries) != 0 {
+		t.Fatalf("entries = %d, want 0", len(entries))
+	}
+}

@@ -270,30 +270,34 @@ type ismExplainEntry struct {
 
 func ismExplainEntries(explain json.RawMessage) []ismExplainEntry {
 	var wrapped struct {
-		Indices map[string]ismExplainEntry `json:"indices"`
+		Indices map[string]json.RawMessage `json:"indices"`
 	}
 	if err := json.Unmarshal(explain, &wrapped); err == nil && wrapped.Indices != nil {
-		out := make([]ismExplainEntry, 0, len(wrapped.Indices))
-		for name, entry := range wrapped.Indices {
-			if entry.Index == "" {
-				entry.Index = name
-			}
-			out = append(out, entry)
-		}
-		return out
+		return ismEntriesFromRaw(wrapped.Indices)
 	}
-	var direct map[string]ismExplainEntry
+	var direct map[string]json.RawMessage
 	if err := json.Unmarshal(explain, &direct); err == nil {
-		out := make([]ismExplainEntry, 0, len(direct))
-		for name, entry := range direct {
-			if entry.Index == "" {
-				entry.Index = name
-			}
-			out = append(out, entry)
-		}
-		return out
+		return ismEntriesFromRaw(direct)
 	}
 	return []ismExplainEntry{}
+}
+
+// ismEntriesFromRaw decodes each raw value individually, skipping non-object
+// entries such as the numeric "total_managed_indices" field OpenSearch
+// includes alongside the index entries.
+func ismEntriesFromRaw(raw map[string]json.RawMessage) []ismExplainEntry {
+	out := make([]ismExplainEntry, 0, len(raw))
+	for name, value := range raw {
+		var entry ismExplainEntry
+		if err := json.Unmarshal(value, &entry); err != nil {
+			continue
+		}
+		if entry.Index == "" {
+			entry.Index = name
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 func ismOperationMode(status json.RawMessage) string {
@@ -304,8 +308,7 @@ func ismOperationMode(status json.RawMessage) string {
 	_ = json.Unmarshal(status, &raw)
 	for _, m := range []map[string]json.RawMessage{raw.Persistent, raw.Defaults} {
 		if v, ok := m["plugins.index_state_management.enabled"]; ok {
-			var enabled bool
-			if json.Unmarshal(v, &enabled) == nil {
+			if enabled, ok := ismBool(v); ok {
 				if enabled {
 					return "RUNNING"
 				}
@@ -314,6 +317,25 @@ func ismOperationMode(status json.RawMessage) string {
 		}
 	}
 	return "RUNNING"
+}
+
+// ismBool accepts both the JSON boolean form and the flat_settings string
+// form ("true"/"false", case-insensitive) that OpenSearch returns.
+func ismBool(value json.RawMessage) (bool, bool) {
+	var enabled bool
+	if err := json.Unmarshal(value, &enabled); err == nil {
+		return enabled, true
+	}
+	var text string
+	if err := json.Unmarshal(value, &text); err == nil {
+		switch strings.ToLower(strings.TrimSpace(text)) {
+		case "true":
+			return true, true
+		case "false":
+			return false, true
+		}
+	}
+	return false, false
 }
 
 // NormalizeSnapshotLifecycle converts ES SLM or OpenSearch SM responses into
