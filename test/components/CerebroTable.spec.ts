@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import CerebroTable from '@/components/CerebroTable.vue'
-import { resetTestStubs } from '../setup'
+import { nuxtUiStubs, resetTestStubs } from '../setup'
 
 const rows = [
   { name: 'beta', size: 20 },
@@ -52,6 +52,18 @@ describe('CerebroTable', () => {
     })
     const names = wrapper.findAll('tbody tr').map((tr) => tr.text())
     expect(names[0]).toContain('gamma')
+  })
+
+  it('emits the underlying row data when a TanStack row object is selected', () => {
+    const wrapper = mount(CerebroTable, { props: { data: rows, columns } })
+    const table = wrapper.findComponent(nuxtUiStubs.UTable)
+    const payload = { original: rows[0], id: 'row-0' }
+
+    ;(table.vm as any).$emit('select', payload)
+
+    expect(wrapper.emitted('select')).toBeTruthy()
+    expect(wrapper.emitted('select')![0][0]).toEqual(rows[0])
+    expect(wrapper.emitted('select')![0][0]).not.toBe(payload)
   })
 })
 

@@ -280,7 +280,8 @@ async function copyCurl(request?: ParsedConsoleRequest) {
 }
 
 function insertHistory(row: any) {
-  const block = `${row.method} ${row.path}${row.body && row.body !== '{}' ? `\n${row.body}` : ''}`
+  const data = row?.original ?? row
+  const block = `${data.method} ${data.path}${data.body && data.body !== '{}' ? `\n${data.body}` : ''}`
   doc.value = `${doc.value.trimEnd()}\n\n${block}\n`
   historyOpen.value = false
 }
