@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/cloudwego/hertz v0.9.5
-	github.com/disaster37/opensearch/v4 v4.0.0-7
+	github.com/disaster37/opensearch/v4 v4.0.0-8
 	github.com/elastic/go-elasticsearch/v9 v9.5.0
 	github.com/go-ldap/ldap/v3 v3.4.8
 	github.com/gorilla/securecookie v1.1.2
