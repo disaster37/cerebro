@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
 	opensearch "github.com/disaster37/opensearch/v4"
+	opensearchapi "github.com/disaster37/opensearch/v4/api"
 
 	"cerebro/internal/domain"
 )
@@ -90,7 +92,88 @@ func (o *osClient) NodesStats(stats []string, ctx context.Context, target domain
 }
 
 func (o *osClient) NodesResourceUsageStats(ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {
-	return o.do(ctx, target, http.MethodGet, "/_nodes/stats/resource_usage_stats", nil, "", "")
+	resp, err := o.do(ctx, target, http.MethodGet, "/_nodes/stats/resource_usage_stats", nil, "", "")
+	if err != nil || resp == nil || !resp.IsSuccess() {
+		return resp, err
+	}
+	return &domain.Response{
+		Status: resp.Status,
+		Body:   normalizeNodesResourceUsageStats(resp.Body),
+	}, nil
+}
+
+type normalizedResourceUsageIO struct {
+	MaxIOUtilizationPercent *float64 `json:"max_io_utilization_percent,omitempty"`
+}
+
+type normalizedResourceUsage struct {
+	Timestamp                      *int64                     `json:"timestamp,omitempty"`
+	CPUUtilizationPercent          *float64                   `json:"cpu_utilization_percent,omitempty"`
+	MemoryUtilizationPercent       *float64                   `json:"memory_utilization_percent,omitempty"`
+	NativeMemoryUtilizationPercent *float64                   `json:"native_memory_utilization_percent,omitempty"`
+	IOUsageStats                   *normalizedResourceUsageIO `json:"io_usage_stats,omitempty"`
+}
+
+type normalizedResourceUsageNode struct {
+	ResourceUsageStats normalizedResourceUsage `json:"resource_usage_stats"`
+}
+
+type normalizedResourceUsageResponse struct {
+	NodesStats  *opensearchapi.ClusterStatsNodesResponse `json:"_nodes,omitempty"`
+	ClusterName string                                   `json:"cluster_name,omitempty"`
+	Nodes       map[string]normalizedResourceUsageNode   `json:"nodes"`
+}
+
+// finitePercent guards against nil, negative, NaN/Inf, and near-MaxFloat64
+// values whose *100 rounding step in domain.ResolveNodeCPU would overflow to +Inf.
+func finitePercent(v *float64) *float64 {
+	if v == nil || math.IsNaN(*v) || math.IsInf(*v, 0) || *v < 0 || math.IsInf(*v*100, 0) {
+		return nil
+	}
+	return v
+}
+
+// normalizeNodesResourceUsageStats decodes OpenSearch's nested string-encoded
+// GET /_nodes/stats/resource_usage_stats payload (nodes.<id>.resource_usage_stats.<id>)
+// using the v4 client model and re-emits the flat numeric per-node shape
+// (nodes.<id>.resource_usage_stats.{cpu_utilization_percent,...}) consumed by
+// internal/domain. If body is not a recognizable NodesStatsResponse with a
+// non-nil nodes map, body is returned unchanged so callers fall back cleanly.
+func normalizeNodesResourceUsageStats(body json.RawMessage) json.RawMessage {
+	if len(body) == 0 {
+		return body
+	}
+	var raw opensearchapi.NodesStatsResponse
+	if err := json.Unmarshal(body, &raw); err != nil || raw.Nodes == nil {
+		return body
+	}
+
+	nodes := make(map[string]normalizedResourceUsageNode, len(raw.Nodes))
+	for nodeID, node := range raw.Nodes {
+		var norm normalizedResourceUsage
+		if usage := node.ResourceUsage(nodeID); usage != nil {
+			norm.Timestamp = usage.Timestamp
+			norm.CPUUtilizationPercent = finitePercent(node.ResourceCPUUtilization(nodeID))
+			norm.MemoryUtilizationPercent = finitePercent(usage.MemoryUtilization())
+			norm.NativeMemoryUtilizationPercent = finitePercent(usage.NativeMemoryUtilization())
+			if maxIO := finitePercent(usage.MaxIOUtilization()); maxIO != nil {
+				norm.IOUsageStats = &normalizedResourceUsageIO{
+					MaxIOUtilizationPercent: maxIO,
+				}
+			}
+		}
+		nodes[nodeID] = normalizedResourceUsageNode{ResourceUsageStats: norm}
+	}
+
+	out, err := json.Marshal(normalizedResourceUsageResponse{
+		NodesStats:  raw.NodesStats,
+		ClusterName: raw.ClusterName,
+		Nodes:       nodes,
+	})
+	if err != nil {
+		return body
+	}
+	return out
 }
 
 func (o *osClient) NodeStats(node string, ctx context.Context, target domain.ElasticServer) (*domain.Response, error) {

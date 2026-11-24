@@ -457,25 +457,41 @@ func runAcceptanceSuite(t *testing.T, url string, wantFlavor elastic.Flavor, wan
 
 		// /overview must expose the same non-negative, source-aware CPU data.
 		overview := service.NewOverviewService(client, client, client, client, client)
-		overviewResp, err := overview.Index(ctx, domain.CerebroRequest{Target: target})
-		if err != nil {
-			t.Fatalf("Overview.Index: %v", err)
+		type overviewNodeCPU struct {
+			ID                 string   `json:"id"`
+			Name               string   `json:"name"`
+			CPUPercent         *float64 `json:"cpu_percent"`
+			CPUSource          string   `json:"cpu_source"`
+			ResourceCPUPercent *float64 `json:"resource_cpu_percent"`
 		}
-		if overviewResp.Status != 200 {
-			t.Fatalf("overview status = %d, want 200: %s", overviewResp.Status, overviewResp.Body)
+		fetchOverviewNodes := func() []overviewNodeCPU {
+			overviewResp, err := overview.Index(ctx, domain.CerebroRequest{Target: target})
+			if err != nil {
+				t.Fatalf("Overview.Index: %v", err)
+			}
+			if overviewResp.Status != 200 {
+				t.Fatalf("overview status = %d, want 200: %s", overviewResp.Status, overviewResp.Body)
+			}
+			var overviewBody struct {
+				Nodes []overviewNodeCPU `json:"nodes"`
+			}
+			if err := json.Unmarshal(overviewResp.Body, &overviewBody); err != nil {
+				t.Fatalf("unmarshal overview: %v", err)
+			}
+			return overviewBody.Nodes
 		}
-		var overviewBody struct {
-			Nodes []struct {
-				Name       string   `json:"name"`
-				CPUPercent *float64 `json:"cpu_percent"`
-			} `json:"nodes"`
-		}
-		if err := json.Unmarshal(overviewResp.Body, &overviewBody); err != nil {
-			t.Fatalf("unmarshal overview: %v", err)
-		}
-		for _, n := range overviewBody.Nodes {
+		overviewNodes := fetchOverviewNodes()
+		for _, n := range overviewNodes {
 			if n.CPUPercent != nil && *n.CPUPercent < 0 {
 				t.Errorf("overview node %s cpu_percent = %v, want non-negative", n.Name, *n.CPUPercent)
+			}
+			if n.ResourceCPUPercent != nil {
+				if n.CPUSource != domain.CPUSourceResourceTracker {
+					t.Errorf("overview node %s cpu_source = %q, want %q", n.Name, n.CPUSource, domain.CPUSourceResourceTracker)
+				}
+				if want := math.Round(*n.ResourceCPUPercent*100) / 100; n.CPUPercent == nil || *n.CPUPercent != want {
+					t.Errorf("overview node %s cpu_percent = %v, want %v", n.Name, n.CPUPercent, want)
+				}
 			}
 		}
 
@@ -503,24 +519,80 @@ func runAcceptanceSuite(t *testing.T, url string, wantFlavor elastic.Flavor, wan
 			if err := json.Unmarshal(resourceResp.Body, &resourceBody); err != nil {
 				t.Fatalf("unmarshal resource_usage_stats: %v", err)
 			}
+			if len(resourceBody.Nodes) == 0 {
+				t.Fatal("resource_usage_stats returned no nodes")
+			}
 			byID := make(map[string]domain.NodePageEntry, len(entries))
 			for _, n := range entries {
 				byID[n.ID] = n
 			}
+			overviewByID := make(map[string]overviewNodeCPU, len(overviewNodes))
+			for _, n := range overviewNodes {
+				overviewByID[n.ID] = n
+			}
 			for id, node := range resourceBody.Nodes {
 				cpu := node.ResourceUsageStats.CPUUtilizationPercent
 				if cpu == nil {
+					t.Logf("OpenSearch node %s resource_usage_stats warming up (cpu_utilization_percent nil); fallback cpu_source=%q", id, byID[id].CPUSource)
 					continue
+				}
+				if *cpu < 0 || math.IsNaN(*cpu) || math.IsInf(*cpu, 0) {
+					t.Errorf("node %s normalized cpu_utilization_percent = %v, want finite >= 0", id, *cpu)
 				}
 				entry, ok := byID[id]
 				if !ok {
 					continue
 				}
+				// If the resource tracker completed cold-start warmup between
+				// the earlier /nodes or /overview call and NodesResourceUsageStats,
+				// refresh once so we assert against post-warmup responses.
+				if entry.ResourceCPUPercent == nil {
+					refreshed, rerr := nodes.Index(ctx, domain.CerebroRequest{Target: target})
+					if rerr != nil {
+						t.Fatalf("Nodes.Index refresh: %v", rerr)
+					}
+					if refreshed.Status != 200 {
+						t.Fatalf("Nodes.Index refresh: status=%d: %s", refreshed.Status, refreshed.Body)
+					}
+					if err := json.Unmarshal(refreshed.Body, &entries); err != nil {
+						t.Fatalf("unmarshal refreshed nodes: %v", err)
+					}
+					for _, n := range entries {
+						byID[n.ID] = n
+					}
+					entry = byID[id]
+				}
 				if entry.CPUSource != domain.CPUSourceResourceTracker {
 					t.Errorf("node %s cpu_source = %q, want %q", id, entry.CPUSource, domain.CPUSourceResourceTracker)
 				}
-				if want := math.Round(*cpu*100) / 100; entry.CPUPercent == nil || *entry.CPUPercent != want {
+				if entry.ResourceCPUPercent == nil {
+					t.Fatalf("node %s resource_cpu_percent = nil, want non-nil", id)
+				}
+				// Within a single /nodes snapshot, cpu_percent must equal the
+				// 2-decimal rounded resource_cpu_percent exactly.
+				if want := math.Round(*entry.ResourceCPUPercent*100) / 100; entry.CPUPercent == nil || *entry.CPUPercent != want {
 					t.Errorf("node %s cpu_percent = %v, want %v", id, entry.CPUPercent, want)
+				}
+				// Across the separate NodesResourceUsageStats call, allow a small
+				// 5s moving-average tick delta while catching any scale/parse bug.
+				if wantSample := math.Round(*cpu*100) / 100; math.Abs(*entry.CPUPercent-wantSample) > 5.0 {
+					t.Errorf("node %s cpu_percent = %v drifted >5%% from resource_usage_stats sample %v", id, *entry.CPUPercent, wantSample)
+				}
+
+				ovNode, ovOK := overviewByID[id]
+				if ovOK && ovNode.ResourceCPUPercent == nil {
+					for _, n := range fetchOverviewNodes() {
+						overviewByID[n.ID] = n
+					}
+					ovNode = overviewByID[id]
+				}
+				if ovOK {
+					if ovNode.CPUSource != domain.CPUSourceResourceTracker {
+						t.Errorf("overview node %s cpu_source = %q, want %q", id, ovNode.CPUSource, domain.CPUSourceResourceTracker)
+					}
+					if ovNode.ResourceCPUPercent == nil || ovNode.CPUPercent == nil || *ovNode.CPUPercent != math.Round(*ovNode.ResourceCPUPercent*100)/100 {
+						t.Errorf("overview node %s cpu_percent/resource_cpu_percent = %v/%v, want exact 2-decimal match", id, ovNode.CPUPercent, ovNode.ResourceCPUPercent)
+					}
 				}
 			}
 		}
