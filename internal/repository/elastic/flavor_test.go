@@ -123,3 +123,22 @@ func TestFlavorCacheConcurrent(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestMultiClientClearFlavorCache(t *testing.T) {
+	m, err := NewMultiClient(false)
+	if err != nil {
+		t.Fatalf("NewMultiClient: %v", err)
+	}
+	m.flavors.set("http://es:9200", FlavorInfo{Flavor: FlavorOpenSearch, Version: "3.4.0"})
+	if _, ok := m.flavors.get("http://es:9200"); !ok {
+		t.Fatal("expected cache hit before clear")
+	}
+
+	m.ClearFlavorCache()
+	if _, ok := m.flavors.get("http://es:9200"); ok {
+		t.Fatal("expected cache miss after ClearFlavorCache")
+	}
+
+	var nilClient *MultiClient
+	nilClient.ClearFlavorCache()
+}

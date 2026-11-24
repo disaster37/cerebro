@@ -53,6 +53,53 @@ All settings live in [`conf/application.yaml`](conf/application.yaml). The key o
 
 See the file itself for the full list and comments.
 
+## Configuration reload
+
+Cerebro watches its configuration directory and hot-reloads `hosts[]` without a
+restart. The rest of the settings are captured at startup.
+
+| Reloads live | Requires a restart |
+|---|---|
+| `hosts[]` (`host`, `name`, `type`, `auth.username`, `auth.password`, `headers-whitelist`) | `secret`, `basePath`, `data.path`, `rest.history.size`, `es.gzip`, `auth.type`, `auth.settings.*`, `--port` |
+
+Restart-only settings are bound to listeners, route registration, the SQLite
+WAL handle, HTTP transports, or session-cookie authentication, so changing them
+live would be unsafe. When a reload contains such a change, Cerebro applies the
+`hosts` change and logs a `WARN` naming the fields that need a restart (never
+their values).
+
+Precedence is CLI flags > environment variables > `application.yaml`. `hosts`
+has no env binding and is always read from the YAML file.
+
+Latency:
+
+- Local filesystem / Docker Compose: inotify fires immediately; the 300 ms
+  debounce coalesces editor save bursts (<1 s total).
+- Kubernetes: kubelet propagation takes ~10–90 s (`syncFrequency` plus the
+  `configMapAndSecretChangeDetectionStrategy` cache), and the 30 s polling
+  fallback may add up to one interval.
+
+On Kubernetes, mount the configuration **directory** (`/opt/cerebro/conf`), not
+a single file via `subPath`: kubelet does not update `subPath` mounts when a
+ConfigMap changes. The shipped raw manifest, Helm chart, and operator all use a
+`projected` volume without `subPath` for this reason.
+
+Verify a reload with `msg="configuration reloaded"` in the logs, or inspect the
+live host list:
+
+```sh
+curl -s http://localhost:9000/connect/hosts
+```
+
+Trigger an immediate reload with `kill -HUP <pid>`. Disable background watching
+with `--config-watch=false` (`CEREBRO_CONFIG_WATCH=false`), or change the polling
+interval with `--config-watch-interval` (`CEREBRO_CONFIG_WATCH_INTERVAL`; `0`
+disables polling). On Kubernetes, force a restart for restart-only changes with:
+
+```sh
+kubectl rollout restart deployment/cerebro
+```
+
 ## Docker
 
 Pre-built images are published to GitHub Container Registry:

@@ -25,7 +25,9 @@ services:
       # BASIC_AUTH_PWD: change-me
       # LDAP_URL / LDAP_BASE_DN / ... see conf/application.yaml
     volumes:
-      - ./conf/application.yaml:/opt/cerebro/conf/application.yaml:ro
+      # Mount the directory (not the single file) so atomic host editor saves
+      # (vim, sed -i, IDEs) propagate new inodes into the container for hot reload.
+      - ./conf:/opt/cerebro/conf:ro
       - cerebro-data:/data
     read_only: true
     tmpfs:

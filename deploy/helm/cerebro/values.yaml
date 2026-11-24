@@ -96,8 +96,11 @@ persistence:
   size: 1Gi
   annotations: {}
 
-# Rendered verbatim into the ConfigMap application.yaml. cerebro reads it once
-# at startup; to apply changes run `kubectl rollout restart deployment/cerebro`.
+# Rendered verbatim into the ConfigMap application.yaml. `hosts` changes
+# propagate automatically within ~10-90 s (kubelet volume sync) and are
+# hot-reloaded by Cerebro without a pod restart. Changes to restart-only
+# settings (secret, basePath, data.path, rest.history.size, es.gzip, auth.*)
+# require `kubectl rollout restart deployment/<release>`.
 config:
   basePath: "/"
   data:
@@ -125,6 +128,12 @@ config:
     # - host: "http://elasticsearch:9200"
     #   name: "My cluster"
 
+configWatch:
+  # Hot-reload `config.hosts` when the mounted ConfigMap updates (~10-90s kubelet propagation).
+  enabled: true
+  # Content-hash polling fallback interval ("0s" disables polling and relies only on inotify).
+  interval: "30s"
+
 secret:
   existingSecret: ""       # use your own Secret (keys: session-key, basic-auth-password, ldap-bind-password)
   sessionKey: ""           # REQUIRED when config.auth.type != "" (template fails otherwise)
@@ -137,4 +146,6 @@ tolerations: []
 affinity: {}
 
 extraVolumes: []
+# Never mount /opt/cerebro/conf/application.yaml via subPath: Kubernetes
+# suppresses ConfigMap updates on subPath mounts, so hot reload would not work.
 extraVolumeMounts: []

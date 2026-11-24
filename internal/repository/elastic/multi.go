@@ -78,6 +78,14 @@ func NewMultiClient(gzip bool) (*MultiClient, error) {
 
 var _ domain.ElasticClient = (*MultiClient)(nil)
 
+// ClearFlavorCache invalidates cached backend flavor detections so host type
+// or URL updates applied via config hot-reload take effect immediately.
+func (m *MultiClient) ClearFlavorCache() {
+	if m != nil && m.flavors != nil {
+		m.flavors.clear()
+	}
+}
+
 // detect issues a raw GET / through the shared targetTransport directly — not
 // through either client engine (avoids the go-elasticsearch product check on
 // OS hosts and the v4 typed path).

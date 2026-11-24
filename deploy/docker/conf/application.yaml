@@ -1,6 +1,8 @@
 # Cerebro compose config.
-# Probe/healthcheck paths below assume the default basePath: "/". If you
-# change basePath, update the Dockerfile HEALTHCHECK and any probes too.
+# `hosts` edits reload automatically without `docker compose restart`; other
+# settings still require a restart. Probe/healthcheck paths below assume the
+# default basePath: "/". If you change basePath, update the Dockerfile
+# HEALTHCHECK and any probes too.
 secret: ""              # overridden by CEREBRO_SECRET env var (see docker-compose.yml)
 basePath: "/"
 data:

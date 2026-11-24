@@ -35,6 +35,15 @@ spec:
         - name: cerebro
           image: {{ include "cerebro.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if or (not .Values.configWatch.enabled) (ne .Values.configWatch.interval "30s") }}
+          args:
+            {{- if not .Values.configWatch.enabled }}
+            - --config-watch=false
+            {{- end }}
+            {{- if ne .Values.configWatch.interval "30s" }}
+            - --config-watch-interval={{ .Values.configWatch.interval }}
+            {{- end }}
+          {{- end }}
           ports:
             - name: http
               containerPort: 9000
@@ -82,6 +91,7 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /opt/cerebro/conf
+              readOnly: true
             - name: data
               mountPath: /data
             - name: tmp
@@ -91,8 +101,14 @@ spec:
             {{- end }}
       volumes:
         - name: config
-          configMap:
-            name: {{ include "cerebro.fullname" . }}
+          # Projected volume mounted without subPath: kubelet atomically swaps
+          # the ..data symlink when the ConfigMap changes (eventual propagation,
+          # typically 10-90s). Cerebro hot-reloads `hosts` without a pod restart.
+          projected:
+            defaultMode: 420
+            sources:
+              - configMap:
+                  name: {{ include "cerebro.fullname" . }}
         - name: data
           {{- if and .Values.persistence.enabled .Values.persistence.existingClaim }}
           persistentVolumeClaim:
