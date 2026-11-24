@@ -83,6 +83,24 @@ func TestNewHostsRedactsCredentialsInErrors(t *testing.T) {
 	}
 }
 
+func TestNewHostsDuplicateFallbackRedactsCredentials(t *testing.T) {
+	// Two unnamed hosts with the same userinfo URL: the duplicate-name error
+	// falls back to the raw URL and must not leak the embedded credentials.
+	_, err := NewHosts([]HostConfig{
+		{Host: "http://user:secret@es:9200"},
+		{Host: "http://user:secret@es:9200"},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "duplicate host name") {
+		t.Fatalf("error = %q, want duplicate host name", err)
+	}
+	if strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "user:") {
+		t.Fatalf("error leaked credentials: %q", err)
+	}
+}
+
 func TestHostsImmutability(t *testing.T) {
 	hosts, err := NewHosts([]HostConfig{{
 		Host:             "http://es:9200",

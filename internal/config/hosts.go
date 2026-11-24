@@ -62,7 +62,13 @@ func NewHosts(cfg []HostConfig) (*Hosts, error) {
 			name = rawURL
 		}
 		if _, ok := byName[name]; ok {
-			return nil, fmt.Errorf("hosts[%d]: duplicate host name %q", i, name)
+			// name may be the fallback URL (with embedded userinfo); redact it
+			// so credentials never leak into an error (CWE-532).
+			display := name
+			if name == rawURL {
+				display = RedactHostURL(name)
+			}
+			return nil, fmt.Errorf("hosts[%d]: duplicate host name %q", i, display)
 		}
 
 		var auth *domain.ESAuth
@@ -98,29 +104,10 @@ func validateHostURL(rawURL string) error {
 }
 
 // RedactHostURL removes userinfo credentials from a host URL before it is
-// logged or embedded in an error.
+// logged or embedded in an error. It delegates to domain.RedactHostURL so the
+// handler and repository packages can redact URLs without importing config.
 func RedactHostURL(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return ""
-	}
-
-	target := trimmed
-	if !strings.Contains(trimmed, "://") {
-		target = "http://" + trimmed
-	}
-	u, err := url.Parse(target)
-	if err != nil {
-		if strings.Contains(raw, "@") {
-			return "<redacted-url>"
-		}
-		return raw
-	}
-	if u.User != nil {
-		u.User = nil
-		return u.String()
-	}
-	return raw
+	return domain.RedactHostURL(raw)
 }
 
 // GetHostNames returns the configured host names in declaration order.
