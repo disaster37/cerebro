@@ -97,7 +97,7 @@ func (h *Handlers) process(c context.Context, ctx *app.RequestContext, fn Proces
 	trustCert := extractBool(body, "trustCertificate")
 	if trustCert && h.Log != nil {
 		h.Log.WithFields(logrus.Fields{
-			"host":     targetHost.Name,
+			"host":     domain.RedactHostURL(targetHost.Name),
 			"endpoint": string(ctx.Path()),
 		}).Warn("TLS certificate verification disabled for target cluster request (trustCertificate=true)")
 	}

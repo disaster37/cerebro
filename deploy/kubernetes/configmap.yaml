@@ -10,8 +10,11 @@ data:
   application.yaml: |
     # Cerebro config. The session secret is NOT stored here: it is injected
     # via the CEREBRO_SECRET env var from the cerebro-secret Secret (see
-    # secret.yaml). cerebro reads this file once at startup; to apply changes
-    # run `kubectl -n cerebro rollout restart deployment/cerebro`.
+    # secret.yaml). `hosts` changes propagate automatically within ~10-90 s
+    # (kubelet volume sync) and are hot-reloaded by Cerebro without a pod
+    # restart. Changes to restart-only settings (secret, basePath, data.path,
+    # rest.history.size, es.gzip, auth.*) or to cerebro-secret still require
+    # `kubectl -n cerebro rollout restart deployment/cerebro`.
     # Probe/healthcheck paths assume the default basePath: "/".
     secret: ""
     basePath: "/"

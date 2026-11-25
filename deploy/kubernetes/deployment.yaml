@@ -82,14 +82,22 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /opt/cerebro/conf
+              readOnly: true
             - name: data
               mountPath: /data
             - name: tmp
               mountPath: /tmp
       volumes:
         - name: config
-          configMap:
-            name: cerebro-config
+          # Projected volume mounted without subPath: kubelet atomically swaps
+          # the ..data symlink when cerebro-config changes (eventual propagation,
+          # typically 10-90s). Cerebro watches /opt/cerebro/conf and hot-reloads
+          # `hosts` without restarting the pod. Do NOT add subPath on volumeMounts.
+          projected:
+            defaultMode: 420
+            sources:
+              - configMap:
+                  name: cerebro-config
         - name: data
           persistentVolumeClaim:
             claimName: cerebro-data

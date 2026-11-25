@@ -121,3 +121,10 @@ func (c *flavorCache) set(url string, info FlavorInfo) {
 	defer c.mu.Unlock()
 	c.entries[url] = flavorEntry{info: info, at: time.Now()}
 }
+
+// clear removes all cached flavor entries.
+func (c *flavorCache) clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	clear(c.entries)
+}

@@ -78,6 +78,14 @@ func NewMultiClient(gzip bool) (*MultiClient, error) {
 
 var _ domain.ElasticClient = (*MultiClient)(nil)
 
+// ClearFlavorCache invalidates cached backend flavor detections so host type
+// or URL updates applied via config hot-reload take effect immediately.
+func (m *MultiClient) ClearFlavorCache() {
+	if m != nil && m.flavors != nil {
+		m.flavors.clear()
+	}
+}
+
 // detect issues a raw GET / through the shared targetTransport directly — not
 // through either client engine (avoids the go-elasticsearch product check on
 // OS hosts and the v4 typed path).
@@ -112,7 +120,7 @@ func (m *MultiClient) detect(ctx context.Context, target domain.ElasticServer) (
 //     no configured type -> return FlavorElasticsearch fallback +
 //     the detection error (caller logs a warning; NOT cached)
 func (m *MultiClient) flavor(ctx context.Context, target domain.ElasticServer) (FlavorInfo, error) {
-	key := strings.TrimRight(target.Host.Name, "/")
+	key := flavorCacheKey(target)
 	if info, ok := m.flavors.get(key); ok {
 		return info, nil
 	}
@@ -137,13 +145,22 @@ func (m *MultiClient) flavor(ctx context.Context, target domain.ElasticServer) (
 	return FlavorInfo{Flavor: FlavorElasticsearch}, err
 }
 
+// flavorCacheKey keys the flavor cache by host URL AND normalized configured
+// type. Without the type in the key, an in-flight request that resolved the
+// previous snapshot could re-populate the cache with a stale flavor after
+// ClearFlavorCache on a hot-reload that changed hosts[].type, poisoning the
+// cache for the full 10-minute TTL.
+func flavorCacheKey(target domain.ElasticServer) string {
+	return strings.TrimRight(target.Host.Name, "/") + "\x00" + string(NormalizeFlavor(target.Host.Type))
+}
+
 // isOpenSearch resolves flavor and returns true when the target is OpenSearch.
 // Detection errors are logged as warnings (the caller proceeds with the
 // resolved fallback flavor).
 func (m *MultiClient) isOpenSearch(ctx context.Context, target domain.ElasticServer) bool {
 	info, err := m.flavor(ctx, target)
 	if err != nil {
-		m.log.Warnf("flavor detection for %q failed: %v (using fallback %s)", target.Host.Name, err, info.Flavor)
+		m.log.Warnf("flavor detection for %q failed: %v (using fallback %s)", domain.RedactHostURL(target.Host.Name), err, info.Flavor)
 	}
 	return info.Flavor == FlavorOpenSearch
 }
@@ -153,7 +170,7 @@ func (m *MultiClient) isOpenSearch(ctx context.Context, target domain.ElasticSer
 func (m *MultiClient) BackendInfo(ctx context.Context, target domain.ElasticServer) (domain.BackendInfo, error) {
 	info, err := m.flavor(ctx, target)
 	if err != nil {
-		m.log.Warnf("BackendInfo detection for %q failed: %v (using fallback %s)", target.Host.Name, err, info.Flavor)
+		m.log.Warnf("BackendInfo detection for %q failed: %v (using fallback %s)", domain.RedactHostURL(target.Host.Name), err, info.Flavor)
 	}
 	return domain.BackendInfo{Type: string(info.Flavor), Version: info.Version}, nil
 }
