@@ -106,7 +106,7 @@ Pre-built images are published to GitHub Container Registry:
 
 <!-- versions:start -->
 ```sh
-docker pull ghcr.io/disaster37/cerebro:0.0.6
+docker pull ghcr.io/disaster37/cerebro:1.0.0
 ```
 <!-- versions:end -->
 
@@ -139,7 +139,7 @@ docker compose -f deploy/docker/docker-compose.yml up -d
 
 <!-- chart-version:start -->
 ```sh
-helm install cerebro oci://ghcr.io/disaster37/cerebro-charts/cerebro --version 0.0.6
+helm install cerebro oci://ghcr.io/disaster37/cerebro-charts/cerebro --version 1.0.0
 ```
 <!-- chart-version:end -->
 
